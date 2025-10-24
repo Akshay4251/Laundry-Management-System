@@ -1,0 +1,95 @@
+/* styles.css */
+
+/* Base Styles */
+:root {
+  --primary: #3B82F6;
+  --secondary: #E5F3FF;
+  --accent: #1E40AF;
+  --sidebar-bg: #F8FAFC;
+  --white: #FFFFFF;
+  --gray-50: #F9FAFB;
+  --gray-100: #F3F4F6;
+  --gray-200: #E5E7EB;
+  --gray-300: #D1D5DB;
+  --gray-400: #9CA3AF;
+  --gray-500: #6B7280;
+  --gray-600: #4B5563;
+  --gray-700: #374151;
+  --gray-800: #1F2937;
+  --gray-900: #111827;
+  --green-100: #D1FAE5;
+  --green-600: #059669;
+  --red-100: #FEE2E2;
+  --red-600: #DC2626;
+  --yellow-100: #FEF3C7;
+  --yellow-600: #D97706;
+  --blue-100: #DBEAFE;
+  --purple-100: #EDE9FE;
+}
+
+body {
+  font-family: 'Poppins', sans-serif;
+  margin: 0;
+  padding: 0;
+  background-color: var(--gray-50);
+  min-height: 100vh;
+}
+
+.app-container {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 256px; /* Fixed width for the sidebar */
+  background-color: var(--white);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  position: fixed; /* Keep the sidebar fixed */
+  left: 0;
+  top: 0;
+  bottom: 0; /* Extend to the bottom */
+}
+
+.main-content {
+  margin-left: 256px; /* Leave space for the sidebar */
+  padding: 1rem; /* Add padding for aesthetics */
+  background-color: var(--sidebar-bg); /* Optional: Set a background color */
+  flex: 1; /* Allow main content to take remaining space */
+}
+
+/* Utility Classes */
+.flex {
+  display: flex;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.rounded-lg {
+  border-radius: 0.5rem;
+}
+
+.shadow-sm {
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.p-6 {
+  padding: 1.5rem;
+}
+
+.mb-8 {
+  margin-bottom: 2rem;
+}
+
+.grid {
+  display: grid;
+}
+
+.gap-6 {
+  gap: 1.5rem;
+}
