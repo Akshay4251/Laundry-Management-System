@@ -147,39 +147,74 @@ const Tags = () => {
       for (let i = 0; i < totalQty; i++) {
         currentToken++;
         previews.push(
-          <div key={`${itemName}-${i}`} className="tag">
-            <div className="tag-content" style={{
+          <div 
+            key={`${itemName}-${i}`} 
+            className="tag"
+            style={{
+              width: '80mm',
+              height: '50mm',
+              minWidth: '80mm',
+              maxWidth: '80mm',
+              minHeight: '50mm',
+              maxHeight: '50mm',
               border: '2px solid #333',
-              borderRadius: '4px',
-              padding: '4mm',
-              width: '100%',
-              height: '100%',
+              borderRadius: '5px',
+              margin: '0',
+              padding: '0',
               boxSizing: 'border-box',
-              backgroundColor: '#ffffff',
               display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center',
               alignItems: 'center',
-              gap: '2.5mm'
-            }}>
+              justifyContent: 'center',
+              backgroundColor: 'white',
+              overflow: 'hidden',
+              flexShrink: 0,
+              flexGrow: 0
+            }}
+          >
+            <div 
+              className="tag-content" 
+              style={{
+                border: '2px solid #333',
+                borderRadius: '4px',
+                padding: '3.5mm 3mm',
+                width: '100%',
+                height: '100%',
+                boxSizing: 'border-box',
+                backgroundColor: '#ffffff',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: '0'
+              }}
+            >
               {/* Order ID - Bold, Big, Center */}
               <div style={{ 
                 fontWeight: '900', 
-                fontSize: '1.5rem', 
+                fontSize: '1.6rem', 
                 textAlign: 'center',
-                letterSpacing: '1px',
+                letterSpacing: '0.5px',
                 color: '#000',
-                marginBottom: '1mm'
+                width: '100%',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                lineHeight: '1.1'
               }}>
                 {tagData.orderId}
               </div>
 
               {/* Customer Name - Normal, Center */}
               <div style={{ 
-                fontSize: '0.95rem', 
+                fontSize: '1rem', 
                 textAlign: 'center',
-                fontWeight: '500',
-                color: '#222'
+                fontWeight: '600',
+                color: '#222',
+                width: '100%',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                lineHeight: '1.1'
               }}>
                 {tagData.customerName}
               </div>
@@ -189,10 +224,11 @@ const Tags = () => {
                 width: '100%',
                 display: 'flex', 
                 justifyContent: 'space-between',
-                fontSize: '0.85rem',
-                paddingTop: '1mm',
-                fontWeight: '600',
-                color: '#333'
+                fontSize: '0.9rem',
+                fontWeight: '700',
+                color: '#333',
+                lineHeight: '1.1',
+                padding: '0 1mm'
               }}>
                 <span>{abbreviateService(tagData.serviceType)}</span>
                 <span>{currentToken}/{totalTokens}</span>
@@ -200,23 +236,27 @@ const Tags = () => {
 
               {/* Receiving Date (Pickup Date) */}
               <div style={{ 
-                fontSize: '0.8rem',
+                fontSize: '0.85rem',
                 width: '100%',
                 textAlign: 'left',
                 color: '#444',
-                fontWeight: '500'
+                fontWeight: '600',
+                lineHeight: '1.1',
+                paddingLeft: '1mm'
               }}>
                 {formatDate(tagData.pickupDate)}
               </div>
 
-              {/* ✅ Garment & Token Number on SAME LINE */}
+              {/* Garment & Token Number on SAME LINE */}
               <div style={{ 
                 width: '100%',
                 display: 'flex', 
                 justifyContent: 'space-between',
-                fontSize: '0.85rem',
-                fontWeight: '600',
-                color: '#333'
+                fontSize: '0.9rem',
+                fontWeight: '700',
+                color: '#333',
+                lineHeight: '1.1',
+                padding: '0 1mm'
               }}>
                 <span>Garment</span>
                 <span>{currentToken}/{totalTokens}</span>
@@ -224,11 +264,13 @@ const Tags = () => {
 
               {/* Delivery Date */}
               <div style={{ 
-                fontSize: '0.8rem',
+                fontSize: '0.85rem',
                 width: '100%',
                 textAlign: 'left',
                 color: '#444',
-                fontWeight: '500'
+                fontWeight: '600',
+                lineHeight: '1.1',
+                paddingLeft: '1mm'
               }}>
                 {formatDate(tagData.deliveryDate)}
               </div>
@@ -277,42 +319,57 @@ const Tags = () => {
         size: 80mm 50mm;
         margin: 0;
       }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
       body {
         font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
         margin: 0;
         padding: 0;
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: flex-start;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }
       .tag {
         width: 80mm;
         height: 50mm;
+        min-width: 80mm;
+        max-width: 80mm;
+        min-height: 50mm;
+        max-height: 50mm;
         border: 2px solid #333;
         border-radius: 5px;
         margin: 0;
+        padding: 0;
         box-sizing: border-box;
         display: flex;
         align-items: center;
         justify-content: center;
+        page-break-after: always;
         page-break-inside: avoid;
         background-color: white;
+        overflow: hidden;
+      }
+      .tag:last-child {
+        page-break-after: auto;
       }
       .tag-content {
         width: 100%;
         height: 100%;
-        padding: 4mm;
+        padding: 3.5mm 3mm;
         box-sizing: border-box;
         border: 2px solid #333;
         border-radius: 4px;
         display: flex;
         flex-direction: column;
-        justify-content: center;
+        justify-content: space-between;
         align-items: center;
         background-color: #ffffff;
-        gap: 2.5mm;
+        gap: 0;
+      }
+      .tag-content > div {
+        line-height: 1.1;
       }
       .tag:nth-child(even) .tag-content {
         background-color: #fafafa;
@@ -320,11 +377,22 @@ const Tags = () => {
       .tag:nth-child(odd) .tag-content {
         background-color: #ffffff;
       }
+      @media print {
+        body {
+          margin: 0 !important;
+          padding: 0 !important;
+        }
+        .tag {
+          page-break-inside: avoid !important;
+        }
+      }
     `;
 
     printWindow.document.write(`
+      <!DOCTYPE html>
       <html>
         <head>
+          <meta charset="UTF-8">
           <title>Tags</title>
           <style>${tagStyles}</style>
         </head>
@@ -508,7 +576,7 @@ const Tags = () => {
               fontWeight: '500',
               color: 'var(--gray-800)',
               marginBottom: '1rem'
-            }}>Tag Preview</h4>
+            }}>Tag Preview (80mm × 50mm)</h4>
 
             <div style={{
               border: '2px dashed var(--gray-300)',
@@ -518,13 +586,30 @@ const Tags = () => {
               minHeight: '400px',
               maxHeight: '600px',
               overflowY: 'auto',
+              overflowX: 'hidden',
               display: 'flex',
               flexDirection: 'column',
               gap: '1rem',
               alignItems: 'center',
-              justifyContent: tagPreview.length ? 'flex-start' : 'center'
+              justifyContent: tagPreview.length ? 'flex-start' : 'center',
+              backgroundColor: '#fafafa'
             }}>
-              {tagPreview.length > 0 ? tagPreview : (
+              {tagPreview.length > 0 ? (
+                <>
+                  {tagPreview.map((tag, index) => (
+                    <div 
+                      key={index}
+                      style={{
+                        transform: 'scale(0.7)',
+                        transformOrigin: 'center center',
+                        marginBottom: '-30px'
+                      }}
+                    >
+                      {tag}
+                    </div>
+                  ))}
+                </>
+              ) : (
                 <p style={{ color: 'var(--gray-500)' }}>
                   Select an order and click "Generate Tag"
                 </p>

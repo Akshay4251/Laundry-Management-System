@@ -26,12 +26,12 @@ const Settings = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [logoFile, setLogoFile] = useState(null);
+  const [clothIconFiles, setClothIconFiles] = useState({}); // Store icon files for each cloth
   const [message, setMessage] = useState({ type: '', text: '' });
-  const [activeTab, setActiveTab] = useState('business'); // 'business', 'services', 'clothTypes'
+  const [activeTab, setActiveTab] = useState('business');
 
-  // New service/cloth forms
   const [newService, setNewService] = useState({ id: '', name: '' });
-  const [newCloth, setNewCloth] = useState({ id: '', name: '', icon: '' });
+  const [newCloth, setNewCloth] = useState({ id: '', name: '', icon: '', iconUrl: '' });
 
   useEffect(() => {
     const load = async () => {
@@ -47,7 +47,6 @@ const Settings = () => {
         if (serviceSnap.exists()) {
           setServiceConfig(serviceSnap.data());
         } else {
-          // Initialize default
           const defaultServiceConfig = {
             serviceTypes: [
               { id: "stain-removal", name: "Stain Removal Treatment", enabled: true },
@@ -74,9 +73,9 @@ const Settings = () => {
         } else {
           const defaultClothConfig = {
             items: [
-              { id: 'shirt', name: 'Shirt', icon: 'shirt', enabled: true },
-              { id: 'tshirt', name: 'T-Shirt', icon: 'tshirt', enabled: true },
-              { id: 'pant', name: 'Pant', icon: 'pant', enabled: true }
+              { id: 'shirt', name: 'Shirt', icon: 'shirt', iconUrl: '', enabled: true },
+              { id: 'tshirt', name: 'T-Shirt', icon: 'tshirt', iconUrl: '', enabled: true },
+              { id: 'pant', name: 'Pant', icon: 'pant', iconUrl: '', enabled: true }
             ]
           };
           setClothConfig(defaultClothConfig);
@@ -166,6 +165,73 @@ const Settings = () => {
     }
   };
 
+  // Cloth Icon Upload Functions
+  const handleClothIconChange = (clothId, file) => {
+    if (!file) return;
+    const tmpUrl = URL.createObjectURL(file);
+    
+    // Store the file for later upload
+    setClothIconFiles(prev => ({ ...prev, [clothId]: file }));
+    
+    // Update preview
+    setClothConfig(prev => ({
+      ...prev,
+      items: prev.items.map(c =>
+        c.id === clothId ? { ...c, iconUrl: tmpUrl } : c
+      )
+    }));
+  };
+
+  const handleNewClothIconChange = (file) => {
+    if (!file) return;
+    const tmpUrl = URL.createObjectURL(file);
+    setClothIconFiles(prev => ({ ...prev, '_new': file }));
+    setNewCloth(prev => ({ ...prev, iconUrl: tmpUrl }));
+  };
+
+  const uploadClothIcon = async (clothId, file) => {
+    if (!file) return '';
+    const safeName = `${Date.now()}_${clothId}_${file.name.replace(/\s+/g, '_')}`;
+    const storageRef = ref(storage, `cloth-icons/${safeName}`);
+    await uploadBytes(storageRef, file);
+    const url = await getDownloadURL(storageRef);
+    return url;
+  };
+
+  const removeClothIcon = async (clothId) => {
+    try {
+      const cloth = clothConfig.items.find(c => c.id === clothId);
+      if (!cloth?.iconUrl) return;
+
+      try {
+        const pathMatch = decodeURIComponent(cloth.iconUrl).match(/\/o\/(.+)\?/);
+        if (pathMatch?.[1]) {
+          const filePath = pathMatch[1];
+          await deleteObject(ref(storage, filePath));
+        }
+      } catch { }
+
+      setClothConfig(prev => ({
+        ...prev,
+        items: prev.items.map(c =>
+          c.id === clothId ? { ...c, iconUrl: '', icon: '' } : c
+        )
+      }));
+
+      // Remove from pending uploads
+      setClothIconFiles(prev => {
+        const updated = { ...prev };
+        delete updated[clothId];
+        return updated;
+      });
+
+      setMessage({ type: 'success', text: 'Icon removed.' });
+    } catch (e) {
+      console.error(e);
+      setMessage({ type: 'error', text: 'Failed to remove icon.' });
+    }
+  };
+
   // Service Management
   const addService = () => {
     if (!newService.id || !newService.name) {
@@ -235,7 +301,7 @@ const Settings = () => {
   };
 
   // Cloth Type Management
-  const addClothType = () => {
+  const addClothType = async () => {
     if (!newCloth.id || !newCloth.name) {
       setMessage({ type: 'error', text: 'Cloth ID and name are required.' });
       return;
@@ -247,13 +313,43 @@ const Settings = () => {
       return;
     }
 
-    setClothConfig(prev => ({
-      ...prev,
-      items: [...prev.items, { ...newCloth, enabled: true }]
-    }));
+    try {
+      setSaving(true);
+      
+      // Upload icon if file is selected
+      let iconUrl = newCloth.iconUrl || '';
+      if (clothIconFiles['_new']) {
+        iconUrl = await uploadClothIcon(newCloth.id, clothIconFiles['_new']);
+      }
 
-    setNewCloth({ id: '', name: '', icon: '' });
-    setMessage({ type: 'success', text: 'Cloth type added. Click "Save Cloth Types" to persist.' });
+      const clothToAdd = {
+        id: newCloth.id,
+        name: newCloth.name,
+        icon: newCloth.icon || newCloth.id,
+        iconUrl: iconUrl,
+        enabled: true
+      };
+
+      setClothConfig(prev => ({
+        ...prev,
+        items: [...prev.items, clothToAdd]
+      }));
+
+      // Clear the form and file
+      setNewCloth({ id: '', name: '', icon: '', iconUrl: '' });
+      setClothIconFiles(prev => {
+        const updated = { ...prev };
+        delete updated['_new'];
+        return updated;
+      });
+
+      setMessage({ type: 'success', text: 'Cloth type added. Click "Save Cloth Types" to persist.' });
+    } catch (e) {
+      console.error(e);
+      setMessage({ type: 'error', text: 'Failed to upload icon.' });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const toggleClothType = (clothId) => {
@@ -265,19 +361,53 @@ const Settings = () => {
     }));
   };
 
-  const deleteClothType = (clothId) => {
+  const deleteClothType = async (clothId) => {
     if (!window.confirm('Delete this cloth type?')) return;
-    setClothConfig(prev => ({
-      ...prev,
-      items: prev.items.filter(c => c.id !== clothId)
-    }));
-    setMessage({ type: 'success', text: 'Cloth type removed. Click "Save Cloth Types" to persist.' });
+    
+    try {
+      // Remove icon from storage if exists
+      const cloth = clothConfig.items.find(c => c.id === clothId);
+      if (cloth?.iconUrl) {
+        try {
+          const pathMatch = decodeURIComponent(cloth.iconUrl).match(/\/o\/(.+)\?/);
+          if (pathMatch?.[1]) {
+            await deleteObject(ref(storage, pathMatch[1]));
+          }
+        } catch { }
+      }
+
+      setClothConfig(prev => ({
+        ...prev,
+        items: prev.items.filter(c => c.id !== clothId)
+      }));
+
+      setMessage({ type: 'success', text: 'Cloth type removed. Click "Save Cloth Types" to persist.' });
+    } catch (e) {
+      console.error(e);
+      setMessage({ type: 'error', text: 'Failed to delete cloth type.' });
+    }
   };
 
   const saveClothTypes = async () => {
     setSaving(true);
     try {
-      await setDoc(doc(db, 'settings', 'clothConfig'), clothConfig);
+      // Upload any pending icon files
+      const updatedItems = await Promise.all(
+        clothConfig.items.map(async (cloth) => {
+          if (clothIconFiles[cloth.id]) {
+            const iconUrl = await uploadClothIcon(cloth.id, clothIconFiles[cloth.id]);
+            return { ...cloth, iconUrl };
+          }
+          return cloth;
+        })
+      );
+
+      const updatedConfig = { ...clothConfig, items: updatedItems };
+      
+      await setDoc(doc(db, 'settings', 'clothConfig'), updatedConfig);
+      setClothConfig(updatedConfig);
+      setClothIconFiles({}); // Clear pending uploads
+      
       setMessage({ type: 'success', text: 'Cloth types saved successfully!' });
     } catch (e) {
       console.error(e);
@@ -690,7 +820,7 @@ const Settings = () => {
                 Add New Cloth Type
               </h4>
               <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                <div style={{ flex: 1, minWidth: '180px' }}>
+                <div style={{ flex: 1, minWidth: '150px' }}>
                   <label style={{ display: 'block', fontSize: '.875rem', fontWeight: 500, color: 'var(--gray-700)', marginBottom: '.5rem' }}>
                     Cloth ID (e.g., "jeans")
                   </label>
@@ -705,7 +835,7 @@ const Settings = () => {
                     }}
                   />
                 </div>
-                <div style={{ flex: 1, minWidth: '180px' }}>
+                <div style={{ flex: 1, minWidth: '150px' }}>
                   <label style={{ display: 'block', fontSize: '.875rem', fontWeight: 500, color: 'var(--gray-700)', marginBottom: '.5rem' }}>
                     Cloth Name
                   </label>
@@ -720,34 +850,54 @@ const Settings = () => {
                     }}
                   />
                 </div>
-                <div style={{ flex: 1, minWidth: '180px' }}>
+                
+                {/* Icon Upload for New Cloth */}
+                <div style={{ flex: 1, minWidth: '200px' }}>
                   <label style={{ display: 'block', fontSize: '.875rem', fontWeight: 500, color: 'var(--gray-700)', marginBottom: '.5rem' }}>
-                    Icon Name (e.g., "jeans")
+                    Upload Icon
                   </label>
-                  <input
-                    type="text"
-                    value={newCloth.icon}
-                    onChange={(e) => setNewCloth({ ...newCloth, icon: e.target.value })}
-                    placeholder="jeans"
-                    style={{
-                      width: '95%', padding: '.5rem 1rem', border: '1px solid var(--gray-300)',
-                      borderRadius: '.5rem', outline: 'none', fontSize: '.875rem'
-                    }}
-                  />
+                  <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center' }}>
+                    {newCloth.iconUrl && (
+                      <div style={{
+                        width: 40, height: 40, border: '1px solid var(--gray-300)', borderRadius: '.35rem',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', background: '#fafafa'
+                      }}>
+                        <img src={newCloth.iconUrl} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                      </div>
+                    )}
+                    <label
+                      htmlFor="new-cloth-icon-upload"
+                      style={{
+                        padding: '.4rem .8rem', backgroundColor: 'var(--primary, #3b82f6)', color: '#fff',
+                        borderRadius: '.4rem', cursor: 'pointer', fontSize: '.8rem'
+                      }}
+                    >
+                      Choose Icon
+                    </label>
+                    <input
+                      id="new-cloth-icon-upload"
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleNewClothIconChange(e.target.files?.[0])}
+                      style={{ display: 'none' }}
+                    />
+                  </div>
                 </div>
+
                 <button
                   onClick={addClothType}
+                  disabled={saving}
                   style={{
                     padding: '.5rem 1.5rem',
-                    backgroundColor: 'var(--primary, #3b82f6)',
+                    backgroundColor: saving ? '#93c5fd' : 'var(--primary, #3b82f6)',
                     color: 'white',
                     borderRadius: '.5rem',
                     border: 'none',
-                    cursor: 'pointer',
+                    cursor: saving ? 'wait' : 'pointer',
                     fontSize: '.875rem'
                   }}
                 >
-                  Add Cloth
+                  {saving ? 'Adding...' : 'Add Cloth'}
                 </button>
               </div>
             </div>
@@ -759,7 +909,7 @@ const Settings = () => {
               </h4>
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
                 gap: '1rem'
               }}>
                 {clothConfig.items.map(cloth => (
@@ -772,14 +922,11 @@ const Settings = () => {
                       backgroundColor: cloth.enabled ? '#fff' : '#f9fafb'
                     }}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div>
-                        <strong>{cloth.name}</strong>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+                      <div style={{ flex: 1 }}>
+                        <strong style={{ fontSize: '1rem' }}>{cloth.name}</strong>
                         <div style={{ fontSize: '0.8rem', color: 'var(--gray-500)', marginTop: '.25rem' }}>
                           ID: {cloth.id}
-                        </div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--gray-500)' }}>
-                          Icon: {cloth.icon}
                         </div>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
@@ -811,6 +958,87 @@ const Settings = () => {
                         >
                           Delete
                         </button>
+                      </div>
+                    </div>
+
+                    {/* Icon Preview and Upload */}
+                    <div style={{ 
+                      display: 'flex', 
+                      gap: '1rem', 
+                      alignItems: 'center',
+                      padding: '0.75rem',
+                      backgroundColor: '#f9fafb',
+                      borderRadius: '.4rem',
+                      border: '1px solid var(--gray-200)'
+                    }}>
+                      <div style={{
+                        width: 60, 
+                        height: 60, 
+                        border: '1px dashed var(--gray-300)', 
+                        borderRadius: '.4rem',
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        overflow: 'hidden', 
+                        background: '#fff'
+                      }}>
+                        {cloth.iconUrl ? (
+                          <img 
+                            src={cloth.iconUrl} 
+                            alt={`${cloth.name} icon`} 
+                            style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
+                          />
+                        ) : (
+                          <span style={{ 
+                            color: 'var(--gray-400)', 
+                            fontSize: '.65rem', 
+                            textAlign: 'center',
+                            padding: '0 .25rem'
+                          }}>
+                            No icon
+                          </span>
+                        )}
+                      </div>
+
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '.4rem' }}>
+                        <label
+                          htmlFor={`cloth-icon-${cloth.id}`}
+                          style={{
+                            padding: '.35rem .75rem',
+                            backgroundColor: 'var(--primary, #3b82f6)',
+                            color: '#fff',
+                            borderRadius: '.35rem',
+                            cursor: 'pointer',
+                            fontSize: '.75rem',
+                            textAlign: 'center',
+                            display: 'inline-block'
+                          }}
+                        >
+                          {cloth.iconUrl ? 'Change Icon' : 'Upload Icon'}
+                        </label>
+                        <input
+                          id={`cloth-icon-${cloth.id}`}
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleClothIconChange(cloth.id, e.target.files?.[0])}
+                          style={{ display: 'none' }}
+                        />
+                        {cloth.iconUrl && (
+                          <button
+                            onClick={() => removeClothIcon(cloth.id)}
+                            style={{
+                              padding: '.35rem .75rem',
+                              backgroundColor: '#ef4444',
+                              color: '#fff',
+                              borderRadius: '.35rem',
+                              border: 'none',
+                              cursor: 'pointer',
+                              fontSize: '.75rem'
+                            }}
+                          >
+                            Remove Icon
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
