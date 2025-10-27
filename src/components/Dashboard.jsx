@@ -86,13 +86,19 @@ const Dashboard = ({ setActiveSection, setOrdersFilter }) => {
           return Math.round(((current - previous) / previous) * 100);
         };
 
+        // ✅ Function to navigate to all orders
+        const handleTotalOrdersClick = () => {
+          if (setOrdersFilter) setOrdersFilter('all');
+          if (setActiveSection) setActiveSection('orders');
+        };
+
         // ✅ Function to navigate to pending orders
         const handlePendingOrdersClick = () => {
           if (setOrdersFilter) setOrdersFilter('pending');
           if (setActiveSection) setActiveSection('orders');
         };
 
-        // ✅ Reordered stats: 1) Total Orders, 2) Pending Orders, 3) Revenue
+        // ✅ Updated stats with Total Orders clickable
         setStats([
           {
             title: 'Total Orders',
@@ -101,7 +107,8 @@ const Dashboard = ({ setActiveSection, setOrdersFilter }) => {
             changeColor: 'var(--green-600)',
             icon: '📦',
             bgColor: 'var(--blue-100)',
-            clickable: false
+            clickable: true,
+            onClick: handleTotalOrdersClick
           },
           {
             title: 'Pending Orders',
@@ -126,7 +133,7 @@ const Dashboard = ({ setActiveSection, setOrdersFilter }) => {
 
         // ✅ FIXED: Updated sorting to work with new 4-digit ID format
         const recentOrdersData = orders
-          .sort((a, b) => parseInt(b.id) - parseInt(a.id)) // ✅ Changed from .replace('BID', '')
+          .sort((a, b) => parseInt(b.id) - parseInt(a.id))
           .slice(0, 3)
           .map(order => ({
             id: `#${order.id}`,
@@ -148,7 +155,18 @@ const Dashboard = ({ setActiveSection, setOrdersFilter }) => {
   }, [setActiveSection, setOrdersFilter]);
 
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: '400px',
+        fontSize: '1.125rem',
+        color: 'var(--gray-600)'
+      }}>
+        Loading dashboard...
+      </div>
+    );
   }
 
   return (
@@ -172,7 +190,8 @@ const Dashboard = ({ setActiveSection, setOrdersFilter }) => {
               border: '1px solid var(--gray-200)',
               cursor: stat.clickable ? 'pointer' : 'default',
               transition: 'all 0.2s',
-              transform: stat.clickable ? 'scale(1)' : 'none'
+              transform: stat.clickable ? 'scale(1)' : 'none',
+              position: 'relative'
             }}
             onMouseEnter={(e) => {
               if (stat.clickable) {
@@ -187,6 +206,18 @@ const Dashboard = ({ setActiveSection, setOrdersFilter }) => {
               }
             }}
           >
+            {stat.clickable && (
+              <div style={{
+                position: 'absolute',
+                top: '0.5rem',
+                right: '0.5rem',
+                fontSize: '0.75rem',
+                color: 'var(--gray-500)',
+                fontStyle: 'italic'
+              }}>
+                Click to view
+              </div>
+            )}
             <div style={{
               display: 'flex',
               alignItems: 'center',
@@ -261,34 +292,42 @@ const Dashboard = ({ setActiveSection, setOrdersFilter }) => {
             marginBottom: '1rem'
           }}>Recent Orders</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {recentOrders.map((order, index) => (
-              <div key={index} style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '0.75rem',
-                backgroundColor: 'var(--gray-50)',
-                borderRadius: '0.5rem'
-              }}>
-                <div>
-                  <p style={{
-                    fontWeight: '500',
-                    color: 'var(--gray-900)'
-                  }}>{order.id}</p>
-                  <p style={{
+            {recentOrders.length > 0 ? (
+              recentOrders.map((order, index) => (
+                <div key={index} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '0.75rem',
+                  backgroundColor: 'var(--gray-50)',
+                  borderRadius: '0.5rem'
+                }}>
+                  <div>
+                    <p style={{
+                      fontWeight: '500',
+                      color: 'var(--gray-900)'
+                    }}>{order.id}</p>
+                    <p style={{
+                      fontSize: '0.875rem',
+                      color: 'var(--gray-600)'
+                    }}>{order.customer}</p>
+                  </div>
+                  <span style={{
+                    padding: '0.25rem 0.75rem',
+                    backgroundColor: order.statusColor,
+                    color: order.textColor,
                     fontSize: '0.875rem',
-                    color: 'var(--gray-600)'
-                  }}>{order.customer}</p>
+                    borderRadius: '9999px'
+                  }}>{order.status}</span>
                 </div>
-                <span style={{
-                  padding: '0.25rem 0.75rem',
-                  backgroundColor: order.statusColor,
-                  color: order.textColor,
-                  fontSize: '0.875rem',
-                  borderRadius: '9999px'
-                }}>{order.status}</span>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p style={{
+                textAlign: 'center',
+                color: 'var(--gray-500)',
+                padding: '2rem'
+              }}>No recent orders</p>
+            )}
           </div>
         </div>
       </div>

@@ -62,144 +62,144 @@ const CustomerBookingsModal = ({ phone, onClose }) => {
   };
 
   const itemMapping = {
-  shirt: 'Shirt',
-  tshirt: 'T-Shirt',
-  pant: 'Pant',
-  starch: 'Starch Cloth',
-  saree: 'Saree',
-  blouse: 'Blouse',
-  panjabi: 'Panjabi Suit',
-  dhotar: 'Dhotar',
-  shalu: 'Shalu / Paithani',
-  coat: 'Coat / Blazer',
-  shervani: 'Shervani',
-  sweater: 'Sweater / Jerkin',
-  onepiece: 'One Piece Ghagara',
-  bedsheet: 'Bedsheet (Single/Double)',
-  blanket: 'Blanket / Rajai',
-  shoes: 'Shoes Washing',
-  helmet: 'Helmet Washing',
-  clothsPerKg: 'Cloths Per Kg'
-};
+    shirt: 'Shirt',
+    tshirt: 'T-Shirt',
+    pant: 'Pant',
+    starch: 'Starch Cloth',
+    saree: 'Saree',
+    blouse: 'Blouse',
+    panjabi: 'Panjabi Suit',
+    dhotar: 'Dhotar',
+    shalu: 'Shalu / Paithani',
+    coat: 'Coat / Blazer',
+    shervani: 'Shervani',
+    sweater: 'Sweater / Jerkin',
+    onepiece: 'One Piece Ghagara',
+    bedsheet: 'Bedsheet (Single/Double)',
+    blanket: 'Blanket / Rajai',
+    shoes: 'Shoes Washing',
+    helmet: 'Helmet Washing',
+    clothsPerKg: 'Cloths Per Kg'
+  };
 
   return (
-    <div style={styles.overlay}>
-      <div style={styles.content}>
-        <h3>Bookings for {phone}</h3>
-        <div style={{ marginBottom: '1rem' }}>
-          <button onClick={onClose} style={styles.button}>Close</button>
-          <button
-            onClick={handlePrint}
-            style={{ ...styles.button, backgroundColor: '#28a745' }}
-          >
-            Print Report
-          </button>
-        </div>
-
-        <div id="printable-area">
-          <table style={styles.table}>
-           <thead>
-  <tr>
-    <th>Booking ID</th>
-    <th>Customer Name</th>
-    <th>Phone</th>
-    <th>Pickup Date</th>
-    <th>Delivery Date</th>
-    <th>Service Type</th>
-    <th>Items</th>
-    <th>Total Items</th>
-    <th>Subtotal</th>
-    <th>GST (18%)</th>
-    <th>Grand Total</th>
-    <th>Status</th>
-    <th>Instructions</th>
-    <th>Created At</th>
-  </tr>
-</thead>
-<tbody>
-  {bookings.length > 0 ? (
-    bookings.map(booking => {
-      const subtotal = booking.totalCost || 0;
-      const gstRate = 0.18;
-      const gstAmount = Math.round(subtotal * gstRate);
-      const grandTotal = subtotal + gstAmount;
-
-      return (
-        <tr key={booking.id}>
-          <td>{booking.id}</td>
-          <td>{booking.customerName}</td>
-          <td>{booking.phone}</td>
-          <td>{booking.pickupDate}</td>
-          <td>{booking.deliveryDate}</td>
-          <td>{booking.serviceType}</td>
-          <td style={{ textAlign: 'left' }}>
-            {booking.items ? (
-              <ul style={{ margin: 0, paddingLeft: '15px' }}>
-                {Object.entries(booking.items).map(([itemName, details], idx) => (
-                  <li key={idx}>
-                    {itemMapping[itemName]} ({details.quantity}) - price: ₹{details.price}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              '-'
-            )}
-          </td>
-          <td>{booking.totalItems}</td>
-
-          {/* NEW COLUMNS */}
-          <td>₹{subtotal}</td>
-          <td>₹{gstAmount}</td>
-          <td><b>₹{grandTotal}</b></td>
-
-          <td>
-            <span
-              style={{
-                padding: '4px 8px',
-                borderRadius: '5px',
-                backgroundColor:
-                  booking.status === 'Pending'
-                    ? '#ffc107'
-                    : booking.status === 'in-progress'
-                    ? '#17a2b8'
-                    : '#28a745',
-                color: '#fff',
-              }}
+    <div style={styles.overlay} onClick={onClose}>
+      <div style={styles.content} onClick={(e) => e.stopPropagation()}>
+        <div style={styles.header}>
+          <h3 style={{ margin: 0 }}>Bookings for {phone}</h3>
+          <div style={styles.buttonGroup}>
+            <button onClick={onClose} style={styles.button}>Close</button>
+            <button
+              onClick={handlePrint}
+              style={{ ...styles.button, backgroundColor: '#28a745' }}
             >
-              {booking.status}
-            </span>
-          </td>
-          <td>{booking.instructions}</td>
-          <td>
-            {booking.createdAt?.toDate
-              ? booking.createdAt.toDate().toLocaleString()
-              : booking.createdAt}
-          </td>
-        </tr>
-      );
-    })
-  ) : (
-    <tr>
-      <td colSpan="14" style={{ textAlign: 'center' }}>
-        No bookings found
-      </td>
-    </tr>
-  )}
-</tbody>
-
-          </table>
-        <style jsx>
-  {`
-    th, td {
-      border: 1px solid gray;
-    }
-    td{
-    padding-left: 5px;
-    }
-  `}
-</style>
-
+              Print Report
+            </button>
+          </div>
         </div>
+
+        <div id="printable-area" style={styles.tableContainer}>
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th>Booking ID</th>
+                <th>Customer Name</th>
+                <th>Phone</th>
+                <th>Pickup Date</th>
+                <th>Delivery Date</th>
+                <th>Service Type</th>
+                <th>Items</th>
+                <th>Total Items</th>
+                <th>Subtotal</th>
+                <th>GST (18%)</th>
+                <th>Grand Total</th>
+                <th>Status</th>
+                <th>Instructions</th>
+                <th>Created At</th>
+              </tr>
+            </thead>
+            <tbody>
+              {bookings.length > 0 ? (
+                bookings.map(booking => {
+                  const subtotal = booking.totalCost || 0;
+                  const gstRate = 0.18;
+                  const gstAmount = Math.round(subtotal * gstRate);
+                  const grandTotal = subtotal + gstAmount;
+
+                  return (
+                    <tr key={booking.id}>
+                      <td>{booking.id}</td>
+                      <td>{booking.customerName}</td>
+                      <td>{booking.phone}</td>
+                      <td>{booking.pickupDate}</td>
+                      <td>{booking.deliveryDate}</td>
+                      <td>{booking.serviceType}</td>
+                      <td style={{ textAlign: 'left' }}>
+                        {booking.items ? (
+                          <ul style={{ margin: 0, paddingLeft: '15px' }}>
+                            {Object.entries(booking.items).map(([itemName, details], idx) => (
+                              <li key={idx}>
+                                {itemMapping[itemName]} ({details.quantity}) - price: ₹{details.price}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          '-'
+                        )}
+                      </td>
+                      <td>{booking.totalItems}</td>
+                      <td>₹{subtotal}</td>
+                      <td>₹{gstAmount}</td>
+                      <td><b>₹{grandTotal}</b></td>
+                      <td>
+                        <span
+                          style={{
+                            padding: '4px 8px',
+                            borderRadius: '5px',
+                            backgroundColor:
+                              booking.status === 'Pending'
+                                ? '#ffc107'
+                                : booking.status === 'in-progress'
+                                ? '#17a2b8'
+                                : '#28a745',
+                            color: '#fff',
+                          }}
+                        >
+                          {booking.status}
+                        </span>
+                      </td>
+                      <td>{booking.instructions}</td>
+                      <td>
+                        {booking.createdAt?.toDate
+                          ? booking.createdAt.toDate().toLocaleString()
+                          : booking.createdAt}
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan="14" style={{ textAlign: 'center' }}>
+                    No bookings found
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <style jsx>
+          {`
+            th, td {
+              border: 1px solid gray;
+              padding: 8px;
+            }
+            th {
+              background-color: #f2f2f2;
+              font-weight: 600;
+            }
+          `}
+        </style>
       </div>
     </div>
   );
@@ -209,24 +209,40 @@ const styles = {
   overlay: {
     position: 'fixed',
     top: 0,
-    left: '10%',
-    width: '90%',
-    height: '100%',
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backdropFilter: 'blur(4px)',
+    WebkitBackdropFilter: 'blur(4px)',
     display: 'flex',
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+    padding: '20px',
+    overflowY: 'auto',
   },
   content: {
     backgroundColor: '#fff',
-    padding: '10px',
-    borderRadius: '10px',
-    width: '92%',
-    maxWidth: '930px',
-    overflow: 'scroll',
-    maxHight:'98vh',
-    margin:'auto',
-    marginLeft:'12.4%'
+    borderRadius: '8px',
+    maxHeight: '90vh',
+    width: '90%',
+    maxWidth: '1200px',
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+  },
+  header: {
+    padding: '20px',
+    borderBottom: '1px solid #e0e0e0',
+    position: 'sticky',
+    top: 0,
+    backgroundColor: '#fff',
+    zIndex: 10,
+  },
+  buttonGroup: {
+    marginTop: '15px',
   },
   button: {
     backgroundColor: '#007bff',
@@ -236,14 +252,19 @@ const styles = {
     borderRadius: '5px',
     marginRight: '8px',
     cursor: 'pointer',
+    fontSize: '14px',
+  },
+  tableContainer: {
+    overflowY: 'auto',
+    overflowX: 'auto',
+    padding: '20px',
+    flex: 1,
   },
   table: {
     width: '100%',
     borderCollapse: 'collapse',
-    marginTop: '20px',
-    border:'1px solid gray',
+    border: '1px solid gray',
   },
-  
 };
 
 export default CustomerBookingsModal;

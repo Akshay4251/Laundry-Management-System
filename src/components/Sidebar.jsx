@@ -8,6 +8,7 @@ const Sidebar = ({ activeSection, setActiveSection }) => {
     { id: 'dashboard', icon: '📊', label: 'Dashboard' },
     { id: 'booking', icon: '➕', label: 'New Booking' },
     { id: 'orders', icon: '📦', label: 'Order Tracker' },
+    { id: 'editorder', icon: '✏️', label: 'Edit Order' },
     { id: 'tags', icon: '🏷️', label: 'Tag Generator' },
     { id: 'customers', icon: '👥', label: 'Customers' },
     { id: 'billing', icon: '💰', label: 'Bill Generator' },
@@ -26,7 +27,6 @@ const Sidebar = ({ activeSection, setActiveSection }) => {
           const data = settingsSnap.data();
           setCompanyName(data.businessName || 'LaundryPro');
 
-          // fetch logo from Firebase Storage (logoPath must be saved in Firestore)
           if (data.logoUrl) {
             const storage = getStorage();
             const logoRef = ref(storage, data.logoUrl);
@@ -60,16 +60,29 @@ const Sidebar = ({ activeSection, setActiveSection }) => {
       height:'100vh',
       overflow:'auto',
       overflowY:'scroll',
-      overflowX:'hidden',  scrollbarWidth: 'none',       // Firefox
-    msOverflowStyle: 'none',
+      overflowX:'hidden',  
+      scrollbarWidth: 'none',
+      msOverflowStyle: 'none',
     }}>
-      <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--gray-200)', textAlign: 'center' }}>
+      <style>
+        {`
+          div::-webkit-scrollbar {
+            display: none;
+          }
+        `}
+      </style>
+      
+      <div style={{ 
+        padding: '1.5rem', 
+        borderBottom: '1px solid var(--gray-200)', 
+        textAlign: 'center' 
+      }}>
         <h1 style={{
-          fontSikze: '1.5rem',
+          fontSize: '1.5rem',
           fontWeight: 'bold',
           color: 'var(--primary)',
-          marginBottom: '0.5rem',  textShadow: "2px 2px 5px rgba(42, 41, 41, 0.2), 4px 4px 10px rgba(0,0,0,0.2)", // 3D shadow
-   
+          marginBottom: '0.5rem',  
+          textShadow: "2px 2px 5px rgba(42, 41, 41, 0.2), 4px 4px 10px rgba(0,0,0,0.2)",
         }}>
           {businessName}
         </h1>
@@ -97,7 +110,9 @@ const Sidebar = ({ activeSection, setActiveSection }) => {
           </div>
         )}
 
-        <p style={{ fontSize: '0.875rem', color: 'var(--gray-600)' }}>Admin Dashboard</p>
+        <p style={{ fontSize: '0.875rem', color: 'var(--gray-600)' }}>
+          Admin Dashboard
+        </p>
       </div>
 
       <nav style={{ marginTop: '1.5rem', flex: 1 }}>
@@ -111,7 +126,7 @@ const Sidebar = ({ activeSection, setActiveSection }) => {
           }}>Main</p>
         </div>
 
-        {navItems.slice(0, 6).map(item => (
+        {navItems.slice(0, 7).map(item => (
           <button
             key={item.id}
             onClick={() => setActiveSection(item.id)}
@@ -125,11 +140,25 @@ const Sidebar = ({ activeSection, setActiveSection }) => {
               backgroundColor: activeSection === item.id ? 'var(--secondary)' : 'transparent',
               transition: 'all 0.2s',
               border: 'none',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              position: 'relative'
+            }}
+            onMouseEnter={e => {
+              if (activeSection !== item.id) {
+                e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.05)';
+              }
+            }}
+            onMouseLeave={e => {
+              if (activeSection !== item.id) {
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }
             }}
           >
-            <span style={{ marginRight: '0.75rem', fontSize: '1.25rem' }}>{item.icon}</span>
-            {item.label}
+            <span style={{ marginRight: '0.75rem', fontSize: '1.25rem' }}>
+              {item.icon}
+            </span>
+            <span>{item.label}</span>
+            {item.id === 'editorder'}
           </button>
         ))}
 
@@ -140,7 +169,7 @@ const Sidebar = ({ activeSection, setActiveSection }) => {
             color: 'var(--gray-400)',
             letterSpacing: '0.05em',
             textTransform: 'uppercase'
-          }}>Settings</p>
+          }}>System</p>
         </div>
 
         <button
@@ -156,6 +185,16 @@ const Sidebar = ({ activeSection, setActiveSection }) => {
             transition: 'all 0.2s',
             border: 'none',
             cursor: 'pointer'
+          }}
+          onMouseEnter={e => {
+            if (activeSection !== 'settings') {
+              e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.05)';
+            }
+          }}
+          onMouseLeave={e => {
+            if (activeSection !== 'settings') {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }
           }}
         >
           <span style={{ marginRight: '0.75rem', fontSize: '1.25rem' }}>⚙️</span>

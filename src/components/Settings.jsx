@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { db, storage } from '../firebase';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs, deleteDoc, writeBatch } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
 const SETTINGS_DOC_PATH = ['settings', 'company'];
@@ -23,23 +23,106 @@ const Settings = () => {
     items: []
   });
 
+  const [orderCounter, setOrderCounter] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [logoFile, setLogoFile] = useState(null);
-  const [clothIconFiles, setClothIconFiles] = useState({}); // Store icon files for each cloth
+  const [clothIconFiles, setClothIconFiles] = useState({});
   const [message, setMessage] = useState({ type: '', text: '' });
   const [activeTab, setActiveTab] = useState('business');
 
   const [newService, setNewService] = useState({ id: '', name: '' });
   const [newCloth, setNewCloth] = useState({ id: '', name: '', icon: '', iconUrl: '' });
+  
+  // Refs for scrolling
+  const tableScrollRef = useRef(null);
+  const [scrollInfo, setScrollInfo] = useState({ 
+    scrollLeft: 0, 
+    scrollWidth: 0, 
+    clientWidth: 0,
+    isDragging: false,
+    startX: 0,
+    scrollLeftStart: 0
+  });
 
+  // Handle scroll event to update custom scrollbar
+  const handleTableScroll = () => {
+    if (tableScrollRef.current) {
+      setScrollInfo(prev => ({
+        ...prev,
+        scrollLeft: tableScrollRef.current.scrollLeft,
+        scrollWidth: tableScrollRef.current.scrollWidth,
+        clientWidth: tableScrollRef.current.clientWidth
+      }));
+    }
+  };
+
+  // Initialize scroll info when the table is rendered
   useEffect(() => {
-    const load = async () => {
+    if (activeTab === 'services' && tableScrollRef.current) {
+      handleTableScroll();
+    }
+  }, [activeTab, clothConfig.items.length, serviceConfig.serviceTypes.length]);
+
+  // Custom scrollbar events
+  const handleScrollStart = (e) => {
+    setScrollInfo(prev => ({
+      ...prev,
+      isDragging: true,
+      startX: e.clientX,
+      scrollLeftStart: prev.scrollLeft
+    }));
+  };
+
+  const handleScrollMove = (e) => {
+    if (!scrollInfo.isDragging) return;
+    
+    const dx = e.clientX - scrollInfo.startX;
+    const scrollRatio = scrollInfo.scrollWidth / scrollInfo.clientWidth;
+    const scrollAmount = dx * scrollRatio;
+    
+    if (tableScrollRef.current) {
+      tableScrollRef.current.scrollLeft = scrollInfo.scrollLeftStart + scrollAmount;
+    }
+  };
+
+  const handleScrollEnd = () => {
+    setScrollInfo(prev => ({ ...prev, isDragging: false }));
+  };
+
+  // Add global mouse event listeners for smooth scrolling
+  useEffect(() => {
+    if (scrollInfo.isDragging) {
+      document.addEventListener('mousemove', handleScrollMove);
+      document.addEventListener('mouseup', handleScrollEnd);
+    } else {
+      document.removeEventListener('mousemove', handleScrollMove);
+      document.removeEventListener('mouseup', handleScrollEnd);
+    }
+    
+    return () => {
+      document.removeEventListener('mousemove', handleScrollMove);
+      document.removeEventListener('mouseup', handleScrollEnd);
+    };
+  }, [scrollInfo.isDragging]);
+
+  // Load initial data
+  useEffect(() => {
+    const loadInitialData = async () => {
       try {
         // Load business settings
-        const snap = await getDoc(doc(db, ...SETTINGS_DOC_PATH));
-        if (snap.exists()) {
-          setSettings(prev => ({ ...prev, ...snap.data() }));
+        const businessSnap = await getDoc(doc(db, ...SETTINGS_DOC_PATH));
+        if (businessSnap.exists()) {
+          setSettings(prev => ({ ...prev, ...businessSnap.data() }));
+        }
+
+        // Load order counter
+        const counterSnap = await getDoc(doc(db, 'settings', 'orderCounter'));
+        if (counterSnap.exists()) {
+          setOrderCounter(counterSnap.data().currentId || 0);
+        } else {
+          await setDoc(doc(db, 'settings', 'orderCounter'), { currentId: 0 });
+          setOrderCounter(0);
         }
 
         // Load service configuration
@@ -81,16 +164,18 @@ const Settings = () => {
           setClothConfig(defaultClothConfig);
         }
 
-      } catch (e) {
-        console.error(e);
+      } catch (error) {
+        console.error('Error loading initial data:', error);
         setMessage({ type: 'error', text: 'Failed to load settings.' });
       } finally {
         setLoading(false);
       }
     };
-    load();
+
+    loadInitialData();
   }, []);
 
+  // Business settings functions
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setSettings(prev => ({ ...prev, [name]: value }));
@@ -125,9 +210,9 @@ const Settings = () => {
       } catch { }
       setSettings(prev => ({ ...prev, logoUrl: '' }));
       setLogoFile(null);
-      setMessage({ type: 'success', text: 'Logo removed.' });
-    } catch (e) {
-      console.error(e);
+      setMessage({ type: 'success', text: 'Logo removed successfully.' });
+    } catch (error) {
+      console.error('Error removing logo:', error);
       setMessage({ type: 'error', text: 'Failed to remove logo.' });
     }
   };
@@ -156,10 +241,93 @@ const Settings = () => {
       await setDoc(doc(db, ...SETTINGS_DOC_PATH), payload, { merge: true });
       setSettings(prev => ({ ...prev, ...payload }));
       setLogoFile(null);
-      setMessage({ type: 'success', text: 'Business settings saved!' });
-    } catch (e2) {
-      console.error(e2);
+      setMessage({ type: 'success', text: 'Business settings saved successfully!' });
+    } catch (error) {
+      console.error('Error saving settings:', error);
       setMessage({ type: 'error', text: 'Failed to save settings.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Order ID Reset Function - Enhanced to delete all orders
+  const deleteAllOrders = async () => {
+    try {
+      // Get all documents from the Bookings collection
+      const bookingsSnapshot = await getDocs(collection(db, 'Bookings'));
+      
+      if (bookingsSnapshot.empty) {
+        return { deletedCount: 0 };
+      }
+
+      // Use batch operations for efficient deletion
+      const batch = writeBatch(db);
+      let deleteCount = 0;
+
+      bookingsSnapshot.docs.forEach((docSnapshot) => {
+        batch.delete(docSnapshot.ref);
+        deleteCount++;
+      });
+
+      // Commit the batch
+      await batch.commit();
+      
+      return { deletedCount: deleteCount };
+    } catch (error) {
+      console.error('Error deleting orders:', error);
+      throw new Error('Failed to delete existing orders');
+    }
+  };
+
+  const handleResetOrderId = async () => {
+    // First confirmation
+    const confirmReset = window.confirm(
+      '⚠️ CRITICAL WARNING: This action will:\n\n' +
+      '• Delete ALL existing orders from the database\n' +
+      '• Reset the Order ID counter to 0001\n' +
+      '• This action CANNOT be undone\n\n' +
+      'Are you absolutely sure you want to continue?'
+    );
+
+    if (!confirmReset) return;
+
+    // Second confirmation with explicit typing requirement
+    const confirmationText = prompt(
+      '🚨 FINAL CONFIRMATION\n\n' +
+      'This will permanently delete ALL orders and reset the counter.\n\n' +
+      'Type "DELETE ALL ORDERS" (exactly as shown) to confirm:'
+    );
+
+    if (confirmationText !== 'DELETE ALL ORDERS') {
+      setMessage({ type: 'error', text: 'Reset cancelled. Confirmation text did not match.' });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // Delete all existing orders
+      const { deletedCount } = await deleteAllOrders();
+      
+      // Reset the order counter
+      await setDoc(doc(db, 'settings', 'orderCounter'), {
+        currentId: 0,
+        lastReset: serverTimestamp(),
+        resetBy: 'admin',
+        deletedOrdersCount: deletedCount
+      });
+      
+      setOrderCounter(0);
+      setMessage({ 
+        type: 'success', 
+        text: `Order system reset successfully! Deleted ${deletedCount} orders. Next order will be 0001.` 
+      });
+      
+    } catch (error) {
+      console.error('Error resetting order system:', error);
+      setMessage({ 
+        type: 'error', 
+        text: 'Failed to reset order system. Please try again.' 
+      });
     } finally {
       setSaving(false);
     }
@@ -169,11 +337,7 @@ const Settings = () => {
   const handleClothIconChange = (clothId, file) => {
     if (!file) return;
     const tmpUrl = URL.createObjectURL(file);
-    
-    // Store the file for later upload
     setClothIconFiles(prev => ({ ...prev, [clothId]: file }));
-    
-    // Update preview
     setClothConfig(prev => ({
       ...prev,
       items: prev.items.map(c =>
@@ -218,21 +382,20 @@ const Settings = () => {
         )
       }));
 
-      // Remove from pending uploads
       setClothIconFiles(prev => {
         const updated = { ...prev };
         delete updated[clothId];
         return updated;
       });
 
-      setMessage({ type: 'success', text: 'Icon removed.' });
-    } catch (e) {
-      console.error(e);
+      setMessage({ type: 'success', text: 'Icon removed successfully.' });
+    } catch (error) {
+      console.error('Error removing icon:', error);
       setMessage({ type: 'error', text: 'Failed to remove icon.' });
     }
   };
 
-  // Service Management
+  // Service Management Functions
   const addService = () => {
     if (!newService.id || !newService.name) {
       setMessage({ type: 'error', text: 'Service ID and name are required.' });
@@ -292,15 +455,15 @@ const Settings = () => {
     try {
       await setDoc(doc(db, 'settings', 'serviceConfig'), serviceConfig);
       setMessage({ type: 'success', text: 'Services saved successfully!' });
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      console.error('Error saving services:', error);
       setMessage({ type: 'error', text: 'Failed to save services.' });
     } finally {
       setSaving(false);
     }
   };
 
-  // Cloth Type Management
+  // Cloth Type Management Functions
   const addClothType = async () => {
     if (!newCloth.id || !newCloth.name) {
       setMessage({ type: 'error', text: 'Cloth ID and name are required.' });
@@ -316,7 +479,6 @@ const Settings = () => {
     try {
       setSaving(true);
       
-      // Upload icon if file is selected
       let iconUrl = newCloth.iconUrl || '';
       if (clothIconFiles['_new']) {
         iconUrl = await uploadClothIcon(newCloth.id, clothIconFiles['_new']);
@@ -335,7 +497,6 @@ const Settings = () => {
         items: [...prev.items, clothToAdd]
       }));
 
-      // Clear the form and file
       setNewCloth({ id: '', name: '', icon: '', iconUrl: '' });
       setClothIconFiles(prev => {
         const updated = { ...prev };
@@ -344,8 +505,8 @@ const Settings = () => {
       });
 
       setMessage({ type: 'success', text: 'Cloth type added. Click "Save Cloth Types" to persist.' });
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      console.error('Error adding cloth type:', error);
       setMessage({ type: 'error', text: 'Failed to upload icon.' });
     } finally {
       setSaving(false);
@@ -363,9 +524,8 @@ const Settings = () => {
 
   const deleteClothType = async (clothId) => {
     if (!window.confirm('Delete this cloth type?')) return;
-    
+
     try {
-      // Remove icon from storage if exists
       const cloth = clothConfig.items.find(c => c.id === clothId);
       if (cloth?.iconUrl) {
         try {
@@ -382,8 +542,8 @@ const Settings = () => {
       }));
 
       setMessage({ type: 'success', text: 'Cloth type removed. Click "Save Cloth Types" to persist.' });
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      console.error('Error deleting cloth type:', error);
       setMessage({ type: 'error', text: 'Failed to delete cloth type.' });
     }
   };
@@ -391,7 +551,6 @@ const Settings = () => {
   const saveClothTypes = async () => {
     setSaving(true);
     try {
-      // Upload any pending icon files
       const updatedItems = await Promise.all(
         clothConfig.items.map(async (cloth) => {
           if (clothIconFiles[cloth.id]) {
@@ -406,11 +565,11 @@ const Settings = () => {
       
       await setDoc(doc(db, 'settings', 'clothConfig'), updatedConfig);
       setClothConfig(updatedConfig);
-      setClothIconFiles({}); // Clear pending uploads
+      setClothIconFiles({});
       
       setMessage({ type: 'success', text: 'Cloth types saved successfully!' });
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      console.error('Error saving cloth types:', error);
       setMessage({ type: 'error', text: 'Failed to save cloth types.' });
     } finally {
       setSaving(false);
@@ -622,6 +781,82 @@ const Settings = () => {
               </div>
             </div>
 
+            {/* Order ID Management Section */}
+            <div style={{
+              padding: '1.5rem',
+              backgroundColor: '#fef3c7',
+              border: '2px solid #f59e0b',
+              borderRadius: '0.5rem'
+            }}>
+              <h4 style={{ fontSize: '1.125rem', fontWeight: 500, color: '#92400e', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span>⚙️</span> Order ID Management
+              </h4>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '1rem'
+                }}>
+                  <div>
+                    <p style={{ fontSize: '0.875rem', color: '#78350f', marginBottom: '0.25rem' }}>
+                      Current Order Counter:
+                    </p>
+                    <p style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#92400e' }}>
+                      {String(orderCounter).padStart(4, '0')}
+                    </p>
+                    <p style={{ fontSize: '0.75rem', color: '#78350f', marginTop: '0.25rem' }}>
+                      Next Order ID will be: {String(orderCounter + 1).padStart(4, '0')}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleResetOrderId}
+                    disabled={saving}
+                    style={{
+                      padding: '0.75rem 1.5rem',
+                      backgroundColor: saving ? '#dc2626' : '#dc2626',
+                      color: 'white',
+                      borderRadius: '0.5rem',
+                      border: 'none',
+                      cursor: saving ? 'not-allowed' : 'pointer',
+                      fontSize: '0.875rem',
+                      fontWeight: '600',
+                      opacity: saving ? 0.6 : 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      transition: 'background-color 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!saving) e.target.style.backgroundColor = '#b91c1c';
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!saving) e.target.style.backgroundColor = '#dc2626';
+                    }}
+                  >
+                    <span>🔄</span>
+                    {saving ? 'Resetting...' : 'Reset Order System'}
+                  </button>
+                </div>
+
+                <div style={{
+                  padding: '0.75rem',
+                  backgroundColor: '#fef2f2',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.75rem',
+                  color: '#991b1b',
+                  border: '1px solid #fecaca'
+                }}>
+                  <strong>🚨 DANGER ZONE:</strong> This will permanently delete ALL existing orders from the database and reset the order counter to 0001. 
+                  This action cannot be undone. Only use this if you want to completely restart your order system.
+                </div>
+              </div>
+            </div>
+
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '.75rem' }}>
               <button
                 type="submit"
@@ -645,154 +880,239 @@ const Settings = () => {
         {/* Services Tab */}
         {activeTab === 'services' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-            {/* Add New Service */}
             <div>
-              <h4 style={{ fontSize: '1.125rem', fontWeight: 500, color: 'var(--gray-800)', marginBottom: '1rem' }}>
-                Add New Service
+              <h4 style={{ fontSize: '1.125rem', fontWeight: 500, color: 'var(--gray-800)', marginBottom: '1.5rem' }}>
+                Services
               </h4>
-              <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                <div style={{ flex: 1, minWidth: '200px' }}>
-                  <label style={{ display: 'block', fontSize: '.875rem', fontWeight: 500, color: 'var(--gray-700)', marginBottom: '.5rem' }}>
-                    Service ID (e.g., "express-wash")
-                  </label>
+
+              <div style={{ marginBottom: '2rem' }}>
+                <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
                   <input
                     type="text"
                     value={newService.id}
                     onChange={(e) => setNewService({ ...newService, id: e.target.value })}
-                    placeholder="express-wash"
+                    placeholder="Service ID (e.g., dry-clean)"
                     style={{
-                      width: '95%', padding: '.5rem 1rem', border: '1px solid var(--gray-300)',
-                      borderRadius: '.5rem', outline: 'none', fontSize: '.875rem'
+                      padding: '.5rem 1rem', border: '1px solid var(--gray-300)',
+                      borderRadius: '.5rem', outline: 'none', fontSize: '.875rem',
+                      flexGrow: 1, minWidth: '180px'
                     }}
                   />
-                </div>
-                <div style={{ flex: 1, minWidth: '200px' }}>
-                  <label style={{ display: 'block', fontSize: '.875rem', fontWeight: 500, color: 'var(--gray-700)', marginBottom: '.5rem' }}>
-                    Service Name
-                  </label>
                   <input
                     type="text"
                     value={newService.name}
                     onChange={(e) => setNewService({ ...newService, name: e.target.value })}
-                    placeholder="Express Wash"
+                    placeholder="Service Name (e.g., Dry Cleaning)"
                     style={{
-                      width: '95%', padding: '.5rem 1rem', border: '1px solid var(--gray-300)',
-                      borderRadius: '.5rem', outline: 'none', fontSize: '.875rem'
+                      padding: '.5rem 1rem', border: '1px solid var(--gray-300)',
+                      borderRadius: '.5rem', outline: 'none', fontSize: '.875rem',
+                      flexGrow: 1, minWidth: '180px'
                     }}
                   />
-                </div>
-                <button
-                  onClick={addService}
-                  style={{
-                    padding: '.5rem 1.5rem',
-                    backgroundColor: 'var(--primary, #3b82f6)',
-                    color: 'white',
-                    borderRadius: '.5rem',
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontSize: '.875rem'
-                  }}
-                >
-                  Add Service
-                </button>
-              </div>
-            </div>
-
-            {/* Existing Services */}
-            <div>
-              <h4 style={{ fontSize: '1.125rem', fontWeight: 500, color: 'var(--gray-800)', marginBottom: '1rem' }}>
-                Existing Services
-              </h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                {serviceConfig.serviceTypes.map(service => (
-                  <div
-                    key={service.id}
+                  <button
+                    type="button"
+                    onClick={addService}
+                    disabled={!newService.id || !newService.name}
                     style={{
-                      padding: '1rem',
-                      border: '1px solid var(--gray-300)',
+                      padding: '.5rem 1.5rem',
+                      backgroundColor: !newService.id || !newService.name ? '#e5e7eb' : 'var(--primary, #3b82f6)',
+                      color: '#fff',
                       borderRadius: '.5rem',
-                      backgroundColor: service.enabled ? '#fff' : '#f9fafb'
+                      border: 'none',
+                      cursor: !newService.id || !newService.name ? 'not-allowed' : 'pointer',
+                      fontSize: '.875rem',
+                      minWidth: '100px'
                     }}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                      <div>
-                        <strong>{service.name}</strong>
-                        <span style={{ marginLeft: '0.5rem', fontSize: '0.875rem', color: 'var(--gray-500)' }}>
-                          ({service.id})
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    Add Service
+                  </button>
+                </div>
+              </div>
+
+              {serviceConfig.serviceTypes.length > 0 ? (
+                <div style={{ border: '1px solid var(--gray-200)', borderRadius: '.5rem', overflow: 'hidden' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 100px 100px', backgroundColor: 'var(--gray-50)', padding: '.75rem 1rem', fontWeight: 500 }}>
+                    <div>ID</div>
+                    <div>Service Name</div>
+                    <div style={{ textAlign: 'center' }}>Status</div>
+                    <div style={{ textAlign: 'center' }}>Action</div>
+                  </div>
+
+                  {serviceConfig.serviceTypes.map(service => (
+                    <div key={service.id} style={{ display: 'grid', gridTemplateColumns: '120px 1fr 100px 100px', padding: '.75rem 1rem', borderTop: '1px solid var(--gray-200)' }}>
+                      <div style={{ fontSize: '.875rem', color: 'var(--gray-700)' }}>{service.id}</div>
+                      <div>{service.name}</div>
+                      <div style={{ textAlign: 'center' }}>
                         <button
+                          type="button"
                           onClick={() => toggleService(service.id)}
                           style={{
-                            padding: '.35rem .75rem',
-                            backgroundColor: service.enabled ? '#10b981' : '#6b7280',
-                            color: 'white',
-                            borderRadius: '.35rem',
-                            border: 'none',
-                            cursor: 'pointer',
-                            fontSize: '.8rem'
+                            padding: '.25rem .75rem', fontSize: '.75rem', borderRadius: '9999px',
+                            backgroundColor: service.enabled ? '#dcfce7' : '#fee2e2',
+                            color: service.enabled ? '#166534' : '#991b1b',
+                            border: 'none', cursor: 'pointer'
                           }}
                         >
                           {service.enabled ? 'Enabled' : 'Disabled'}
                         </button>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
                         <button
+                          type="button"
                           onClick={() => deleteService(service.id)}
                           style={{
-                            padding: '.35rem .75rem',
-                            backgroundColor: '#ef4444',
-                            color: 'white',
-                            borderRadius: '.35rem',
-                            border: 'none',
-                            cursor: 'pointer',
-                            fontSize: '.8rem'
+                            padding: '.25rem .75rem', fontSize: '.75rem', borderRadius: '.25rem',
+                            backgroundColor: '#fee2e2', color: '#991b1b',
+                            border: 'none', cursor: 'pointer'
                           }}
                         >
                           Delete
                         </button>
                       </div>
                     </div>
-
-                    {/* Price Matrix for this service */}
-                    <div style={{ marginTop: '1rem' }}>
-                      <p style={{ fontSize: '.875rem', fontWeight: 500, marginBottom: '.5rem', color: 'var(--gray-700)' }}>
-                        Prices (₹):
-                      </p>
-                      <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
-                        gap: '0.75rem'
-                      }}>
-                        {clothConfig.items.filter(c => c.enabled).map(cloth => (
-                          <div key={cloth.id} style={{ display: 'flex', flexDirection: 'column' }}>
-                            <label style={{ fontSize: '.75rem', color: 'var(--gray-600)', marginBottom: '.25rem' }}>
-                              {cloth.name}
-                            </label>
-                            <input
-                              type="number"
-                              value={serviceConfig.prices[service.id]?.[cloth.id] || 0}
-                              onChange={(e) => updatePrice(service.id, cloth.id, e.target.value)}
-                              style={{
-                                padding: '.35rem .5rem',
-                                border: '1px solid var(--gray-300)',
-                                borderRadius: '.35rem',
-                                outline: 'none',
-                                fontSize: '.8rem'
-                              }}
-                              min="0"
-                              step="0.01"
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '2rem 0', backgroundColor: 'var(--gray-50)', borderRadius: '.5rem' }}>
+                  <p style={{ color: 'var(--gray-500)' }}>No services added yet</p>
+                </div>
+              )}
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <div>
+              <h4 style={{ fontSize: '1.125rem', fontWeight: 500, color: 'var(--gray-800)', marginBottom: '1.5rem' }}>
+                Service Prices
+              </h4>
+
+              {serviceConfig.serviceTypes.length > 0 && clothConfig.items.length > 0 ? (
+                <div style={{ 
+                  border: '1px solid var(--gray-200)', 
+                  borderRadius: '.5rem', 
+                  overflow: 'hidden',
+                  position: 'relative'
+                }}>
+                  {/* Table wrapper with horizontal scroll */}
+                  <div 
+                    ref={tableScrollRef}
+                    onScroll={handleTableScroll}
+                    style={{ 
+                      overflowX: 'auto', 
+                      width: '100%',
+                      position: 'relative',
+                      paddingBottom: '5px'
+                    }}
+                  >
+                    <table style={{ 
+                      width: '100%', 
+                      borderCollapse: 'collapse',
+                      minWidth: clothConfig.items.length > 3 ? `${clothConfig.items.length * 120 + 200}px` : '100%'
+                    }}>
+                      <thead>
+                        <tr style={{ backgroundColor: 'var(--gray-50)' }}>
+                          <th style={{ 
+                            padding: '.75rem 1rem', 
+                            textAlign: 'left', 
+                            fontWeight: 500, 
+                            borderBottom: '1px solid var(--gray-200)',
+                            position: 'sticky',
+                            left: 0,
+                            backgroundColor: 'var(--gray-50)',
+                            zIndex: 2,
+                            minWidth: '200px'
+                          }}>Service</th>
+                          {clothConfig.items.map(cloth => (
+                            <th key={cloth.id} style={{ 
+                              padding: '.75rem 1rem', 
+                              textAlign: 'center', 
+                              fontWeight: 500, 
+                              borderBottom: '1px solid var(--gray-200)',
+                              minWidth: '120px'
+                            }}>
+                              {cloth.name}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {serviceConfig.serviceTypes.map(service => (
+                          <tr key={service.id}>
+                            <td style={{ 
+                              padding: '.75rem 1rem', 
+                              borderBottom: '1px solid var(--gray-200)',
+                              position: 'sticky',
+                              left: 0,
+                              backgroundColor: 'white',
+                              zIndex: 1,
+                              boxShadow: '2px 0 5px -2px rgba(0,0,0,0.1)'
+                            }}>
+                              {service.name}
+                              {!service.enabled && <span style={{ fontSize: '.75rem', color: '#ef4444', marginLeft: '.5rem' }}>(Disabled)</span>}
+                            </td>
+                            {clothConfig.items.map(cloth => (
+                              <td key={cloth.id} style={{ padding: '.5rem', borderBottom: '1px solid var(--gray-200)', textAlign: 'center' }}>
+                                <input
+                                  type="number"
+                                  value={serviceConfig.prices[service.id]?.[cloth.id] || ''}
+                                  onChange={(e) => updatePrice(service.id, cloth.id, e.target.value)}
+                                  placeholder="0"
+                                  style={{
+                                    width: '80px',
+                                    padding: '.5rem',
+                                    border: '1px solid var(--gray-300)',
+                                    borderRadius: '.25rem',
+                                    textAlign: 'center'
+                                  }}
+                                />
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Custom scrollbar */}
+                  {clothConfig.items.length > 3 && scrollInfo.scrollWidth > scrollInfo.clientWidth && (
+                    <div style={{
+                      padding: '0.5rem 0',
+                      marginTop: '0.5rem',
+                      position: 'relative'
+                    }}>
+                      <div style={{
+                        height: '6px',
+                        backgroundColor: '#e5e7eb',
+                        borderRadius: '999px',
+                        position: 'relative',
+                        cursor: 'pointer'
+                      }}>
+                        <div 
+                          onMouseDown={handleScrollStart}
+                          style={{
+                            position: 'absolute',
+                            left: `${(scrollInfo.scrollLeft / (scrollInfo.scrollWidth - scrollInfo.clientWidth)) * 100}%`,
+                            width: `${(scrollInfo.clientWidth / scrollInfo.scrollWidth) * 100}%`,
+                            height: '100%',
+                            backgroundColor: '#6366f1',
+                            borderRadius: '999px',
+                            cursor: 'grab',
+                            transform: 'translateX(-0%)',
+                            transition: scrollInfo.isDragging ? 'none' : 'left 0.1s ease-out'
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '2rem 0', backgroundColor: 'var(--gray-50)', borderRadius: '.5rem' }}>
+                  <p style={{ color: 'var(--gray-500)' }}>Add services and cloth types to configure prices</p>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '.75rem' }}>
               <button
+                type="button"
                 onClick={saveServices}
                 disabled={saving}
                 style={{
@@ -814,240 +1134,233 @@ const Settings = () => {
         {/* Cloth Types Tab */}
         {activeTab === 'clothTypes' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-            {/* Add New Cloth Type */}
             <div>
-              <h4 style={{ fontSize: '1.125rem', fontWeight: 500, color: 'var(--gray-800)', marginBottom: '1rem' }}>
-                Add New Cloth Type
+              <h4 style={{ fontSize: '1.125rem', fontWeight: 500, color: 'var(--gray-800)', marginBottom: '1.5rem' }}>
+                Cloth Types
               </h4>
-              <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                <div style={{ flex: 1, minWidth: '150px' }}>
-                  <label style={{ display: 'block', fontSize: '.875rem', fontWeight: 500, color: 'var(--gray-700)', marginBottom: '.5rem' }}>
-                    Cloth ID (e.g., "jeans")
-                  </label>
-                  <input
-                    type="text"
-                    value={newCloth.id}
-                    onChange={(e) => setNewCloth({ ...newCloth, id: e.target.value })}
-                    placeholder="jeans"
-                    style={{
-                      width: '95%', padding: '.5rem 1rem', border: '1px solid var(--gray-300)',
-                      borderRadius: '.5rem', outline: 'none', fontSize: '.875rem'
-                    }}
-                  />
-                </div>
-                <div style={{ flex: 1, minWidth: '150px' }}>
-                  <label style={{ display: 'block', fontSize: '.875rem', fontWeight: 500, color: 'var(--gray-700)', marginBottom: '.5rem' }}>
-                    Cloth Name
-                  </label>
-                  <input
-                    type="text"
-                    value={newCloth.name}
-                    onChange={(e) => setNewCloth({ ...newCloth, name: e.target.value })}
-                    placeholder="Jeans"
-                    style={{
-                      width: '95%', padding: '.5rem 1rem', border: '1px solid var(--gray-300)',
-                      borderRadius: '.5rem', outline: 'none', fontSize: '.875rem'
-                    }}
-                  />
-                </div>
+
+              {/* New Cloth Type Card */}
+              <div style={{
+                padding: '2rem',
+                backgroundColor: '#f8fafc',
+                borderRadius: '10px',
+                border: '1px solid #e2e8f0'
+              }}>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#0f172a', marginBottom: '1.5rem' }}>
+                  Add New Cloth Type
+                </h3>
                 
-                {/* Icon Upload for New Cloth */}
-                <div style={{ flex: 1, minWidth: '200px' }}>
-                  <label style={{ display: 'block', fontSize: '.875rem', fontWeight: 500, color: 'var(--gray-700)', marginBottom: '.5rem' }}>
-                    Upload Icon
-                  </label>
-                  <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center' }}>
-                    {newCloth.iconUrl && (
-                      <div style={{
-                        width: 40, height: 40, border: '1px solid var(--gray-300)', borderRadius: '.35rem',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', background: '#fafafa'
-                      }}>
-                        <img src={newCloth.iconUrl} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                      </div>
-                    )}
-                    <label
-                      htmlFor="new-cloth-icon-upload"
-                      style={{
-                        padding: '.4rem .8rem', backgroundColor: 'var(--primary, #3b82f6)', color: '#fff',
-                        borderRadius: '.4rem', cursor: 'pointer', fontSize: '.8rem'
-                      }}
-                    >
-                      Choose Icon
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: '1rem', alignItems: 'end' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#475569', marginBottom: '0.5rem' }}>
+                      Cloth ID
                     </label>
                     <input
-                      id="new-cloth-icon-upload"
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => handleNewClothIconChange(e.target.files?.[0])}
-                      style={{ display: 'none' }}
+                      type="text"
+                      value={newCloth.id}
+                      onChange={(e) => setNewCloth({ ...newCloth, id: e.target.value })}
+                      placeholder="e.g., jeans"
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem 1rem',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '8px',
+                        outline: 'none',
+                        fontSize: '0.95rem',
+                        backgroundColor: 'white',
+                        boxSizing: 'border-box'
+                      }}
                     />
                   </div>
-                </div>
-
-                <button
-                  onClick={addClothType}
-                  disabled={saving}
-                  style={{
-                    padding: '.5rem 1.5rem',
-                    backgroundColor: saving ? '#93c5fd' : 'var(--primary, #3b82f6)',
-                    color: 'white',
-                    borderRadius: '.5rem',
-                    border: 'none',
-                    cursor: saving ? 'wait' : 'pointer',
-                    fontSize: '.875rem'
-                  }}
-                >
-                  {saving ? 'Adding...' : 'Add Cloth'}
-                </button>
-              </div>
-            </div>
-
-            {/* Existing Cloth Types */}
-            <div>
-              <h4 style={{ fontSize: '1.125rem', fontWeight: 500, color: 'var(--gray-800)', marginBottom: '1rem' }}>
-                Existing Cloth Types
-              </h4>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-                gap: '1rem'
-              }}>
-                {clothConfig.items.map(cloth => (
-                  <div
-                    key={cloth.id}
-                    style={{
-                      padding: '1rem',
-                      border: '1px solid var(--gray-300)',
-                      borderRadius: '.5rem',
-                      backgroundColor: cloth.enabled ? '#fff' : '#f9fafb'
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
-                      <div style={{ flex: 1 }}>
-                        <strong style={{ fontSize: '1rem' }}>{cloth.name}</strong>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--gray-500)', marginTop: '.25rem' }}>
-                          ID: {cloth.id}
+                  
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#475569', marginBottom: '0.5rem' }}>
+                      Cloth Name
+                    </label>
+                    <input
+                      type="text"
+                      value={newCloth.name}
+                      onChange={(e) => setNewCloth({ ...newCloth, name: e.target.value })}
+                      placeholder="e.g., Jeans"
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem 1rem',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '8px',
+                        outline: 'none',
+                        fontSize: '0.95rem',
+                        backgroundColor: 'white',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+                  
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#475569', marginBottom: '0.5rem' }}>
+                      Icon
+                    </label>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      {newCloth.iconUrl && (
+                        <div style={{
+                          width: 42,
+                          height: 42,
+                          border: '1px solid #cbd5e1',
+                          borderRadius: '6px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          overflow: 'hidden',
+                          backgroundColor: 'white'
+                        }}>
+                          <img src={newCloth.iconUrl} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                         </div>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                        <button
-                          onClick={() => toggleClothType(cloth.id)}
-                          style={{
-                            padding: '.25rem .6rem',
-                            backgroundColor: cloth.enabled ? '#10b981' : '#6b7280',
-                            color: 'white',
-                            borderRadius: '.3rem',
-                            border: 'none',
-                            cursor: 'pointer',
-                            fontSize: '.75rem'
-                          }}
-                        >
-                          {cloth.enabled ? 'On' : 'Off'}
-                        </button>
-                        <button
-                          onClick={() => deleteClothType(cloth.id)}
-                          style={{
-                            padding: '.25rem .6rem',
-                            backgroundColor: '#ef4444',
-                            color: 'white',
-                            borderRadius: '.3rem',
-                            border: 'none',
-                            cursor: 'pointer',
-                            fontSize: '.75rem'
-                          }}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Icon Preview and Upload */}
-                    <div style={{ 
-                      display: 'flex', 
-                      gap: '1rem', 
-                      alignItems: 'center',
-                      padding: '0.75rem',
-                      backgroundColor: '#f9fafb',
-                      borderRadius: '.4rem',
-                      border: '1px solid var(--gray-200)'
-                    }}>
-                      <div style={{
-                        width: 60, 
-                        height: 60, 
-                        border: '1px dashed var(--gray-300)', 
-                        borderRadius: '.4rem',
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center', 
-                        overflow: 'hidden', 
-                        background: '#fff'
-                      }}>
-                        {cloth.iconUrl ? (
-                          <img 
-                            src={cloth.iconUrl} 
-                            alt={`${cloth.name} icon`} 
-                            style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
-                          />
-                        ) : (
-                          <span style={{ 
-                            color: 'var(--gray-400)', 
-                            fontSize: '.65rem', 
-                            textAlign: 'center',
-                            padding: '0 .25rem'
-                          }}>
-                            No icon
-                          </span>
-                        )}
-                      </div>
-
-                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '.4rem' }}>
-                        <label
-                          htmlFor={`cloth-icon-${cloth.id}`}
-                          style={{
-                            padding: '.35rem .75rem',
-                            backgroundColor: 'var(--primary, #3b82f6)',
-                            color: '#fff',
-                            borderRadius: '.35rem',
-                            cursor: 'pointer',
-                            fontSize: '.75rem',
-                            textAlign: 'center',
-                            display: 'inline-block'
-                          }}
-                        >
-                          {cloth.iconUrl ? 'Change Icon' : 'Upload Icon'}
-                        </label>
-                        <input
-                          id={`cloth-icon-${cloth.id}`}
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => handleClothIconChange(cloth.id, e.target.files?.[0])}
-                          style={{ display: 'none' }}
-                        />
-                        {cloth.iconUrl && (
-                          <button
-                            onClick={() => removeClothIcon(cloth.id)}
-                            style={{
-                              padding: '.35rem .75rem',
-                              backgroundColor: '#ef4444',
-                              color: '#fff',
-                              borderRadius: '.35rem',
-                              border: 'none',
-                              cursor: 'pointer',
-                              fontSize: '.75rem'
-                            }}
-                          >
-                            Remove Icon
-                          </button>
-                        )}
-                      </div>
+                      )}
+                      <label
+                        htmlFor="new-cloth-icon"
+                        style={{
+                          padding: '0.75rem 1rem',
+                          backgroundColor: '#6366f1',
+                          color: 'white',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          fontSize: '0.9rem',
+                          fontWeight: 500,
+                          display: 'inline-block'
+                        }}
+                      >
+                        Choose
+                      </label>
+                      <input
+                        id="new-cloth-icon"
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleNewClothIconChange(e.target.files?.[0])}
+                        style={{ display: 'none' }}
+                      />
                     </div>
                   </div>
-                ))}
+                  
+                  <button
+                    onClick={addClothType}
+                    disabled={saving || !newCloth.id || !newCloth.name}
+                    style={{
+                      padding: '0.75rem 1.5rem',
+                      backgroundColor: (saving || !newCloth.id || !newCloth.name) ? '#93c5fd' : '#3b82f6',
+                      color: 'white',
+                      borderRadius: '8px',
+                      border: 'none',
+                      cursor: (saving || !newCloth.id || !newCloth.name) ? 'not-allowed' : 'pointer',
+                      fontSize: '0.9rem',
+                      fontWeight: 500,
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    {saving ? 'Adding...' : 'Add Cloth'}
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ marginTop: '2rem' }}>
+                {clothConfig.items.length > 0 ? (
+                  <div style={{ border: '1px solid var(--gray-200)', borderRadius: '.5rem', overflow: 'hidden' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 100px 120px', backgroundColor: 'var(--gray-50)', padding: '.75rem 1rem', fontWeight: 500 }}>
+                      <div>Icon</div>
+                      <div>Cloth Type</div>
+                      <div style={{ textAlign: 'center' }}>Status</div>
+                      <div style={{ textAlign: 'center' }}>Actions</div>
+                    </div>
+
+                    {clothConfig.items.map(cloth => (
+                      <div key={cloth.id} style={{ display: 'grid', gridTemplateColumns: '100px 1fr 100px 120px', padding: '.75rem 1rem', borderTop: '1px solid var(--gray-200)', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ 
+                            width: 48, 
+                            height: 48, 
+                            border: '1px solid var(--gray-200)', 
+                            borderRadius: '.25rem', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            position: 'relative',
+                            overflow: 'hidden',
+                            backgroundColor: 'white'
+                          }}>
+                            {cloth.iconUrl ? (
+                              <img src={cloth.iconUrl} alt={cloth.name} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                            ) : (
+                              <span style={{ color: 'var(--gray-500)', fontSize: '.75rem' }}>{cloth.id.substr(0, 2)}</span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ fontWeight: 500 }}>{cloth.name}</div>
+                          <div style={{ fontSize: '.75rem', color: 'var(--gray-500)' }}>ID: {cloth.id}</div>
+                        </div>
+
+                        <div style={{ textAlign: 'center' }}>
+                          <button
+                            type="button"
+                            onClick={() => toggleClothType(cloth.id)}
+                            style={{
+                              padding: '.25rem .75rem', fontSize: '.75rem', borderRadius: '9999px',
+                              backgroundColor: cloth.enabled ? '#dcfce7' : '#fee2e2',
+                              color: cloth.enabled ? '#166534' : '#991b1b',
+                              border: 'none', cursor: 'pointer'
+                            }}
+                          >
+                            {cloth.enabled ? 'Enabled' : 'Disabled'}
+                          </button>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '.5rem', justifyContent: 'center' }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              document.getElementById(`cloth-icon-${cloth.id}`).click();
+                            }}
+                            style={{
+                              padding: '.25rem .75rem', fontSize: '.75rem', borderRadius: '.25rem',
+                              backgroundColor: '#f3f4f6', color: '#374151',
+                              border: 'none', cursor: 'pointer'
+                            }}
+                          >
+                            Icon
+                          </button>
+                          <input
+                            id={`cloth-icon-${cloth.id}`}
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleClothIconChange(cloth.id, e.target.files?.[0])}
+                            style={{ display: 'none' }}
+                          />
+
+                          <button
+                            type="button"
+                            onClick={() => deleteClothType(cloth.id)}
+                            style={{
+                              padding: '.25rem .75rem', fontSize: '.75rem', borderRadius: '.25rem',
+                              backgroundColor: '#fee2e2', color: '#991b1b',
+                              border: 'none', cursor: 'pointer'
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '2rem 0', backgroundColor: 'var(--gray-50)', borderRadius: '.5rem' }}>
+                    <p style={{ color: 'var(--gray-500)' }}>No cloth types added yet</p>
+                  </div>
+                )}
               </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '.75rem' }}>
               <button
+                type="button"
                 onClick={saveClothTypes}
                 disabled={saving}
                 style={{

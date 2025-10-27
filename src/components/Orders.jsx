@@ -104,7 +104,13 @@ Thank you for choosing us!
   };
 
   const filteredOrders = orders.filter(order => {
-    if (filterStatus !== 'all' && order.status !== filterStatus) return false;
+    // Handle urgent filter separately
+    if (filterStatus === 'urgent') {
+      if (!order.urgentDelivery) return false;
+    } else if (filterStatus !== 'all' && order.status !== filterStatus) {
+      return false;
+    }
+    
     if (pickupDateFilter && order.pickupDate !== pickupDateFilter) return false;
     if (deliveryDateFilter && order.deliveryDate !== deliveryDateFilter) return false;
     return true;
@@ -116,7 +122,12 @@ Thank you for choosing us!
     setDeliveryDateFilter('');
   };
 
-  const getStatusStyles = (status) => {
+  const getStatusStyles = (status, isUrgent = false) => {
+    // Special styling for urgent pending orders
+    if (status === 'pending' && isUrgent) {
+      return { bg: '#ff6b35', text: '#ffffff' }; // Dark orange background with white text
+    }
+
     switch (status) {
       case 'pending':
         return { bg: 'var(--yellow-100)', text: 'var(--yellow-800)' };
@@ -131,6 +142,12 @@ Thank you for choosing us!
       default:
         return { bg: 'var(--gray-100)', text: 'var(--gray-800)' };
     }
+  };
+
+  // Helper function to get filter display name
+  const getFilterDisplayName = (filter) => {
+    if (filter === 'urgent') return 'Urgent';
+    return filter.charAt(0).toUpperCase() + filter.slice(1).replace('-', ' ');
   };
 
   return (
@@ -181,6 +198,7 @@ Thank you for choosing us!
                 }}
               >
                 <option value="all">All Status</option>
+                <option value="urgent">Urgent</option>
                 <option value="pending">Pending</option>
                 <option value="in-progress">In Progress</option>
                 <option value="ready">Ready</option>
@@ -237,18 +255,19 @@ Thank you for choosing us!
           </div>
 
           {(filterStatus !== 'all' || pickupDateFilter || deliveryDateFilter) && (
-            <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
               <span style={{ fontSize: '0.875rem', color: 'var(--gray-600)' }}>Active Filters:</span>
               {filterStatus !== 'all' && (
                 <span style={{
                   padding: '0.25rem 0.75rem',
-                  backgroundColor: 'var(--blue-100)',
-                  color: 'var(--primary)',
+                  backgroundColor: filterStatus === 'urgent' ? '#fff3e0' : 'var(--blue-100)',
+                  color: filterStatus === 'urgent' ? '#ff6b35' : 'var(--primary)',
                   borderRadius: '9999px',
                   fontSize: '0.75rem',
-                  fontWeight: '500'
+                  fontWeight: '500',
+                  border: filterStatus === 'urgent' ? '1px solid #ff6b35' : 'none'
                 }}>
-                  Status: {filterStatus}
+                  Status: {getFilterDisplayName(filterStatus)}
                 </span>
               )}
               {pickupDateFilter && (
@@ -297,8 +316,8 @@ Thank you for choosing us!
             </thead>
             <tbody>
               {filteredOrders.map((order) => {
-                const statusStyles = getStatusStyles(order.status);
                 const isUrgent = order.urgentDelivery;
+                const statusStyles = getStatusStyles(order.status, isUrgent);
                 
                 return (
                   <tr
@@ -345,7 +364,8 @@ Thank you for choosing us!
                           backgroundColor: statusStyles.bg,
                           color: statusStyles.text,
                           outline: 'none',
-                          cursor: 'pointer'
+                          cursor: 'pointer',
+                          fontWeight: isUrgent && order.status === 'pending' ? '600' : 'normal'
                         }}
                       >
                         <option value="pending">Pending</option>

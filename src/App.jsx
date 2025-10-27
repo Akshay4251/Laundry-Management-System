@@ -7,6 +7,7 @@ import Header from './components/Header';
 import Dashboard from './components/Dashboard';
 import Booking from './components/Booking';
 import Orders from './components/Orders';
+import EditOrder from './components/EditOrder'; // New import
 import Tags from './components/Tags';
 import Customers from './components/Customers';
 import Billing from './components/Billing';
@@ -20,7 +21,7 @@ function App() {
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [activeSection, setActiveSection] = useState('dashboard');
   const [showProfile, setShowProfile] = useState(false);
-  const [ordersFilter, setOrdersFilter] = useState('all'); // ✅ Added state for orders filter
+  const [ordersFilter, setOrdersFilter] = useState('all');
   
   const ENCRYPTION_KEY = import.meta.env.VITE_ENC_ID || 'default-secret-key';
 
@@ -62,7 +63,6 @@ function App() {
     checkAuth();
   }, [ENCRYPTION_KEY]);
 
-  // ✅ Updated sections object to pass props dynamically
   const sections = {
     dashboard: (
       <Dashboard 
@@ -71,7 +71,8 @@ function App() {
       />
     ),
     booking: <Booking />,
-    orders: <Orders initialFilter={ordersFilter} />, // ✅ Pass filter to Orders
+    orders: <Orders initialFilter={ordersFilter} />,
+    editorder: <EditOrder />, // New section added
     tags: <Tags />,
     customers: <Customers />,
     billing: <Billing />,

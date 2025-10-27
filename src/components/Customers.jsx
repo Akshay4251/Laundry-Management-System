@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../firebase'; // Adjust the import based on your project structure
+import { db } from '../firebase';
 import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
-import CustomerBookingsModal from './CustomerBookingsModal'; // Import the modal component
+import CustomerBookingsModal from './CustomerBookingsModal';
 
 const Customers = () => {
   const [customers, setCustomers] = useState([]);
@@ -9,74 +9,70 @@ const Customers = () => {
   const [newCustomer, setNewCustomer] = useState({
     name: '',
     phone: '',
-    email: '',
     totalOrders: 0,
     lastOrder: new Date().toISOString().split('T')[0]
   });
-  const [selectedPhone, setSelectedPhone] = useState(null); // State to hold the selected phone number
-  const [showModal, setShowModal] = useState(false); // State to control modal visibility
-const [isEditMode, setIsEditMode] = useState(false);
-const [editCustomerId, setEditCustomerId] = useState(null);
+  const [selectedPhone, setSelectedPhone] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editCustomerId, setEditCustomerId] = useState(null);
 
+  useEffect(() => {
+    const fetchData = async () => {
+      // Fetch all customers
+      const customerSnapshot = await getDocs(collection(db, 'customers'));
+      const customerList = customerSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
 
-  // Fetch customers from Firestore on component mount
-useEffect(() => {
-  const fetchData = async () => {
-    // Fetch all customers
-    const customerSnapshot = await getDocs(collection(db, 'customers'));
-    const customerList = customerSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+      // Fetch all bookings
+      const bookingsSnapshot = await getDocs(collection(db, 'Bookings'));
+      const bookings = bookingsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
 
-    // Fetch all bookings
-    const bookingsSnapshot = await getDocs(collection(db, 'Bookings'));
-    const bookings = bookingsSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+      // Map to store booking data by phone
+      const bookingStatsByPhone = {};
 
-    // Map to store booking data by phone
-    const bookingStatsByPhone = {};
+      bookings.forEach(booking => {
+        const phone = booking.phone;
+        const createdAt = booking.createdAt?.seconds ? new Date(booking.createdAt.seconds * 1000) : null;
 
-    bookings.forEach(booking => {
-      const phone = booking.phone;
-      const createdAt = booking.createdAt?.seconds ? new Date(booking.createdAt.seconds * 1000) : null;
+        if (!phone || !createdAt) return;
 
-      if (!phone || !createdAt) return;
+        if (!bookingStatsByPhone[phone]) {
+          bookingStatsByPhone[phone] = {
+            totalOrders: 1,
+            lastOrder: createdAt
+          };
+        } else {
+          bookingStatsByPhone[phone].totalOrders += 1;
 
-      if (!bookingStatsByPhone[phone]) {
-        bookingStatsByPhone[phone] = {
-          totalOrders: 1,
-          lastOrder: createdAt
-        };
-      } else {
-        bookingStatsByPhone[phone].totalOrders += 1;
-
-        if (createdAt > bookingStatsByPhone[phone].lastOrder) {
-          bookingStatsByPhone[phone].lastOrder = createdAt;
+          if (createdAt > bookingStatsByPhone[phone].lastOrder) {
+            bookingStatsByPhone[phone].lastOrder = createdAt;
+          }
         }
-      }
-    });
+      });
 
-    // Combine booking stats with customers
-    const updatedCustomerList = customerList.map(customer => {
-      const stats = bookingStatsByPhone[customer.phone];
-      return {
-        ...customer,
-        totalOrders: stats?.totalOrders || 0,
-        lastOrder: stats?.lastOrder
-          ? stats.lastOrder.toISOString().split('T')[0]
-          : '—'
-      };
-    });
+      // Combine booking stats with customers
+      const updatedCustomerList = customerList.map(customer => {
+        const stats = bookingStatsByPhone[customer.phone];
+        return {
+          ...customer,
+          totalOrders: stats?.totalOrders || 0,
+          lastOrder: stats?.lastOrder
+            ? stats.lastOrder.toISOString().split('T')[0]
+            : '—'
+        };
+      });
 
-    setCustomers(updatedCustomerList);
-  };
+      setCustomers(updatedCustomerList);
+    };
 
-  fetchData();
-}, []);
-
+    fetchData();
+  }, []);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -86,31 +82,20 @@ useEffect(() => {
     }));
   };
 
-const saveCustomer = async () => {
-  if (isEditMode && newCustomer.phone !== editCustomerId) {
-    // Delete old doc if phone was changed
-    await deleteDoc(doc(db, 'customers', editCustomerId));
-  }
+  const saveCustomer = async () => {
+    if (isEditMode && newCustomer.phone !== editCustomerId) {
+      await deleteDoc(doc(db, 'customers', editCustomerId));
+    }
 
-  const customerRef = doc(db, 'customers', newCustomer.phone);
-  await setDoc(customerRef, newCustomer);
+    const customerRef = doc(db, 'customers', newCustomer.phone);
+    await setDoc(customerRef, newCustomer);
 
-  setCustomers(prev => {
-    const withoutOld = prev.filter(c => c.phone !== editCustomerId);
-    return [...withoutOld, { ...newCustomer, id: newCustomer.phone }];
-  });
+    setCustomers(prev => {
+      const withoutOld = prev.filter(c => c.phone !== editCustomerId);
+      return [...withoutOld, { ...newCustomer, id: newCustomer.phone }];
+    });
 
-  resetForm();
-};
-
-
-
-
-
-  const deleteCustomer = async (id) => {
-    const customerRef = doc(db, 'customers', id);
-    await deleteDoc(customerRef);
-    setCustomers(prev => prev.filter(customer => customer.phone !== id));
+    resetForm();
   };
 
   const openModal = (phone) => {
@@ -123,18 +108,15 @@ const saveCustomer = async () => {
     setSelectedPhone(null);
   };
 
-
   const resetForm = () => {
-  setNewCustomer({
-    name: '',
-    phone: '',
-    email: '',
-  });
-  setShowAddForm(false);
-  setIsEditMode(false);
-  setEditCustomerId(null);
-};
-
+    setNewCustomer({
+      name: '',
+      phone: ''
+    });
+    setShowAddForm(false);
+    setIsEditMode(false);
+    setEditCustomerId(null);
+  };
 
   return (
     <div style={{ padding: '1.5rem' }}>
@@ -186,7 +168,7 @@ const saveCustomer = async () => {
               fontWeight: '600',
               color: 'var(--gray-800)',
               marginBottom: '1rem'
-            }}>Add New Customer</h4>
+            }}>{isEditMode ? 'Edit Customer' : 'Add New Customer'}</h4>
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
@@ -241,30 +223,6 @@ const saveCustomer = async () => {
                   placeholder="(555) 123-4567"
                 />
               </div>
-              <div>
-                <label style={{
-                  display: 'block',
-                  fontSize: '0.875rem',
-                  fontWeight: '500',
-                  color: 'var(--gray-700)',
-                  marginBottom: '0.5rem'
-                }}>Email</label>
-                <input
-                  type="email"
-                  name="email"
-                  value={newCustomer.email}
-                  onChange={handleInputChange}
-                  style={{
-                    width: '95%',
-                    padding: '0.5rem 1rem',
-                    border: '1px solid var(--gray-300)',
-                    borderRadius: '0.5rem',
-                    outline: 'none',
-                    fontSize: '0.875rem'
-                  }}
-                  placeholder="customer@email.com"
-                />
-              </div>
             </div>
             <div style={{
               display: 'flex',
@@ -297,10 +255,8 @@ const saveCustomer = async () => {
                   fontSize: '0.875rem'
                 }}
               >
-                  {isEditMode ? 'Update Customer' : 'Save Customer'}
+                {isEditMode ? 'Update Customer' : 'Save Customer'}
               </button>
-          
-
             </div>
           </div>
         )}
@@ -335,15 +291,6 @@ const saveCustomer = async () => {
                   color: 'var(--gray-500)',
                   textTransform: 'uppercase',
                   letterSpacing: '0.05em'
-                }}>Email</th>
-                <th style={{
-                  padding: '0.75rem 1.5rem',
-                  textAlign: 'left',
-                  fontSize: '0.75rem',
-                  fontWeight: '500',
-                  color: 'var(--gray-500)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em'
                 }}>Total Orders</th>
                 <th style={{
                   padding: '0.75rem 1.5rem',
@@ -354,15 +301,6 @@ const saveCustomer = async () => {
                   textTransform: 'uppercase',
                   letterSpacing: '0.05em'
                 }}>Last Order</th>
-                <th style={{
-                  padding: '0.75rem 1.5rem',
-                  textAlign: 'left',
-                  fontSize: '0.75rem',
-                  fontWeight: '500',
-                  color: 'var(--gray-500)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em'
-                }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -390,12 +328,6 @@ const saveCustomer = async () => {
                     fontSize: '0.875rem',
                     color: 'var(--gray-900)',
                     whiteSpace: 'nowrap'
-                  }}>{customer.email}</td>
-                  <td style={{
-                    padding: '1rem 1.5rem',
-                    fontSize: '0.875rem',
-                    color: 'var(--gray-900)',
-                    whiteSpace: 'nowrap'
                   }}>{customer.totalOrders}</td>
                   <td style={{
                     padding: '1rem 1.5rem',
@@ -403,50 +335,6 @@ const saveCustomer = async () => {
                     color: 'var(--gray-900)',
                     whiteSpace: 'nowrap'
                   }}>{customer.lastOrder}</td>
-                  <td style={{
-                    padding: '1rem 1.5rem',
-                    fontSize: '0.875rem',
-                    fontWeight: '500',
-                    whiteSpace: 'nowrap'
-                  }}>
-                    <button
-  onClick={(e) => {
-    e.stopPropagation();
-    setNewCustomer({
-      name: customer.name || '',
-      phone: customer.phone || '',
-      email: customer.email || '',
-    });
-    setEditCustomerId(customer.phone);
-    setIsEditMode(true);
-    setShowAddForm(true);
-  }}
-  style={{
-    color: 'var(--primary)',
-    marginRight: '0.75rem',
-    cursor: 'pointer',
-    border: 'none',
-    background: 'transparent'
-  }}
->
-  Edit
-</button>
-
-                    <button
-                      onClick={(e) => {
-                          e.stopPropagation(); // prevent row click
-                          deleteCustomer(customer.phone);
-                        }}                      
-                        style={{
-                        color: 'var(--red-600)',
-                        cursor: 'pointer',
-                        border: 'none',
-                        background: 'transparent'
-                      }}
-                    >
-                      Delete
-                    </button>
-                  </td>
                 </tr>
               ))}
             </tbody>
@@ -454,8 +342,43 @@ const saveCustomer = async () => {
         </div>
       </div>
 
-      {/* Render the modal if showModal is true */}
-      {showModal && <CustomerBookingsModal phone={selectedPhone} onClose={closeModal} />}
+      {/* Modal with transparent background - only modal visible */}
+      {showModal && (
+        <div 
+          onClick={closeModal}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'transparent',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'flex-start',
+            paddingTop: '70px',
+            paddingBottom: '40px',
+            zIndex: 1000,
+            overflowY: 'auto',
+            pointerEvents: 'auto'
+          }}
+        >
+          <div 
+            onClick={e => e.stopPropagation()}
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              width: '90%',
+              maxWidth: '900px',
+              boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
+              marginBottom: '40px',
+              pointerEvents: 'auto'
+            }}
+          >
+            <CustomerBookingsModal phone={selectedPhone} onClose={closeModal} />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

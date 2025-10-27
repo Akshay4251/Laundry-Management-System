@@ -27,6 +27,9 @@ const Booking = () => {
     bedsheet: sbed, blanket: dbed, shoes, helmet, clothsPerKg: clothsperkg
   };
 
+  // Add a default placeholder image for when no icon is available
+  const defaultIcon = shirt; // or create a specific placeholder image
+
   const [formData, setFormData] = useState({
     customerName: '',
     phone: '',
@@ -112,24 +115,24 @@ const Booking = () => {
           clothTypes = clothDoc.data().items || [];
         } else {
           clothTypes = [
-            { id: 'shirt', name: 'Shirt', icon: 'shirt', enabled: true },
-            { id: 'tshirt', name: 'T-Shirt', icon: 'tshirt', enabled: true },
-            { id: 'pant', name: 'Pant', icon: 'pant', enabled: true },
-            { id: 'starch', name: 'Starch Cloth', icon: 'starch', enabled: true },
-            { id: 'saree', name: 'Saree', icon: 'saree', enabled: true },
-            { id: 'blouse', name: 'Blouse', icon: 'blouse', enabled: true },
-            { id: 'panjabi', name: 'Panjabi Suit', icon: 'panjabi', enabled: true },
-            { id: 'dhotar', name: 'Dhotar', icon: 'dhotar', enabled: true },
-            { id: 'shalu', name: 'Shalu / Paithani', icon: 'shalu', enabled: true },
-            { id: 'coat', name: 'Coat / Blazer', icon: 'coat', enabled: true },
-            { id: 'shervani', name: 'Shervani', icon: 'shervani', enabled: true },
-            { id: 'sweater', name: 'Sweater / Jerkin', icon: 'sweater', enabled: true },
-            { id: 'onepiece', name: 'One Piece Ghagara', icon: 'onepiece', enabled: true },
-            { id: 'bedsheet', name: 'Bedsheet (Single/Double)', icon: 'bedsheet', enabled: true },
-            { id: 'blanket', name: 'Blanket / Rajai', icon: 'blanket', enabled: true },
-            { id: 'shoes', name: 'Shoes Washing', icon: 'shoes', enabled: true },
-            { id: 'helmet', name: 'Helmet Washing', icon: 'helmet', enabled: true },
-            { id: 'clothsPerKg', name: 'Cloths Per Kg', icon: 'clothsPerKg', enabled: true }
+            { id: 'shirt', name: 'Shirt', icon: 'shirt', iconUrl: '', enabled: true },
+            { id: 'tshirt', name: 'T-Shirt', icon: 'tshirt', iconUrl: '', enabled: true },
+            { id: 'pant', name: 'Pant', icon: 'pant', iconUrl: '', enabled: true },
+            { id: 'starch', name: 'Starch Cloth', icon: 'starch', iconUrl: '', enabled: true },
+            { id: 'saree', name: 'Saree', icon: 'saree', iconUrl: '', enabled: true },
+            { id: 'blouse', name: 'Blouse', icon: 'blouse', iconUrl: '', enabled: true },
+            { id: 'panjabi', name: 'Panjabi Suit', icon: 'panjabi', iconUrl: '', enabled: true },
+            { id: 'dhotar', name: 'Dhotar', icon: 'dhotar', iconUrl: '', enabled: true },
+            { id: 'shalu', name: 'Shalu / Paithani', icon: 'shalu', iconUrl: '', enabled: true },
+            { id: 'coat', name: 'Coat / Blazer', icon: 'coat', iconUrl: '', enabled: true },
+            { id: 'shervani', name: 'Shervani', icon: 'shervani', iconUrl: '', enabled: true },
+            { id: 'sweater', name: 'Sweater / Jerkin', icon: 'sweater', iconUrl: '', enabled: true },
+            { id: 'onepiece', name: 'One Piece Ghagara', icon: 'onepiece', iconUrl: '', enabled: true },
+            { id: 'bedsheet', name: 'Bedsheet (Single/Double)', icon: 'bedsheet', iconUrl: '', enabled: true },
+            { id: 'blanket', name: 'Blanket / Rajai', icon: 'blanket', iconUrl: '', enabled: true },
+            { id: 'shoes', name: 'Shoes Washing', icon: 'shoes', iconUrl: '', enabled: true },
+            { id: 'helmet', name: 'Helmet Washing', icon: 'helmet', iconUrl: '', enabled: true },
+            { id: 'clothsPerKg', name: 'Cloths Per Kg', icon: 'clothsPerKg', iconUrl: '', enabled: true }
           ];
 
           await setDoc(doc(db, "settings", "clothConfig"), { items: clothTypes });
@@ -153,6 +156,27 @@ const Booking = () => {
 
     fetchConfiguration();
   }, []);
+
+  // Helper function to get the appropriate icon for a cloth item
+  const getClothIcon = (item) => {
+    // Priority 1: Use custom uploaded icon URL if available
+    if (item.iconUrl && item.iconUrl.trim() !== '') {
+      return item.iconUrl;
+    }
+    
+    // Priority 2: Use icon from imageMap based on icon field
+    if (item.icon && imageMap[item.icon]) {
+      return imageMap[item.icon];
+    }
+    
+    // Priority 3: Use icon from imageMap based on id field
+    if (imageMap[item.id]) {
+      return imageMap[item.id];
+    }
+    
+    // Priority 4: Use default icon
+    return defaultIcon;
+  };
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -283,12 +307,14 @@ const Booking = () => {
 
       const bookingId = String(maxBookingNum + 1).padStart(4, '0');
 
+      // Save customer data
       await setDoc(doc(db, "customers", formData.phone), {
         name: formData.customerName,
         phone: formData.phone,
         createdAt: new Date()
       }, { merge: true });
 
+      // Save booking with status field
       await setDoc(doc(db, "Bookings", bookingId), {
         customerName: formData.customerName,
         phone: formData.phone,
@@ -305,11 +331,13 @@ const Booking = () => {
         grandTotal: (
           Object.values(selectedItems).reduce((sum, item) => sum + item.quantity * item.price, 0) * 1.18
         ).toFixed(2),
+        status: 'pending', // ✅ ADDED STATUS FIELD
         createdAt: new Date()
       });
 
       alert(`Booking created successfully!\nOrder ID: ${bookingId}\nCustomer: ${formData.customerName}${formData.urgentDelivery ? '\nURGENT DELIVERY' : ''}`);
 
+      // Reset form
       const resetItems = Object.keys(formData.items).reduce((acc, item) => {
         acc[item] = { quantity: 0, price: servicePrices[formData.serviceType]?.[item] || 0 };
         return acc;
@@ -455,7 +483,7 @@ const Booking = () => {
             </select>
           </div>
 
-          {/* ✅ URGENT DELIVERY CHECKBOX (No Lightning Emoji) */}
+          {/* URGENT DELIVERY CHECKBOX */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -520,7 +548,7 @@ const Booking = () => {
                 >
                   <div style={{ marginBottom: '0.5rem' }}>
                     <img 
-                      src={imageMap[item.icon] || imageMap[item.id] || shirt} 
+                      src={getClothIcon(item)}
                       alt={item.name} 
                       style={{ width: '60px', height: '60px', objectFit: 'contain' }} 
                     />

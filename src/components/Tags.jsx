@@ -124,15 +124,18 @@ const Tags = () => {
     setShowDropdown(false);
   };
 
-  const abbreviateService = (serviceType) => {
-    const abbreviations = {
-      'stain-removal': 'SR',
-      'ironing': 'I',
-      'wash-and-iron': 'W&I',
-      'wash-and-fold': 'W&F',
-      'starch-and-iron': 'S&I'
+  // Function to get full service name
+  const getFullServiceName = (serviceType) => {
+    const serviceNames = {
+      'stain-removal': 'Stain Removal',
+      'ironing': 'Ironing',
+      'wash-and-iron': 'Wash & Iron',
+      'wash-and-fold': 'Wash & Fold',
+      'starch-and-iron': 'Starch & Iron'
     };
-    return abbreviations[serviceType] || serviceType.split('-').map(word => word[0].toUpperCase()).join('');
+    return serviceNames[serviceType] || serviceType.split('-').map(word => 
+      word.charAt(0).toUpperCase() + word.slice(1)
+    ).join(' ');
   };
 
   const generateTag = () => {
@@ -191,7 +194,7 @@ const Tags = () => {
               {/* Order ID - Bold, Big, Center */}
               <div style={{ 
                 fontWeight: '900', 
-                fontSize: '1.6rem', 
+                fontSize: '1.8rem', 
                 textAlign: 'center',
                 letterSpacing: '0.5px',
                 color: '#000',
@@ -204,11 +207,11 @@ const Tags = () => {
                 {tagData.orderId}
               </div>
 
-              {/* Customer Name - Normal, Center */}
+              {/* Customer Name - Center */}
               <div style={{ 
-                fontSize: '1rem', 
+                fontSize: '1.1rem', 
                 textAlign: 'center',
-                fontWeight: '600',
+                fontWeight: '700',
                 color: '#222',
                 width: '100%',
                 overflow: 'hidden',
@@ -219,58 +222,74 @@ const Tags = () => {
                 {tagData.customerName}
               </div>
 
-              {/* Service Type (abbreviated) & Token Number */}
+              {/* Service Type (Centered) & Token Number (Right) */}
               <div style={{ 
                 width: '100%',
-                display: 'flex', 
-                justifyContent: 'space-between',
-                fontSize: '0.9rem',
-                fontWeight: '700',
+                position: 'relative',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                fontSize: '1.05rem',
+                fontWeight: '800',
                 color: '#333',
                 lineHeight: '1.1',
                 padding: '0 1mm'
               }}>
-                <span>{abbreviateService(tagData.serviceType)}</span>
-                <span>{currentToken}/{totalTokens}</span>
+                {/* Service Name - Centered */}
+                <span style={{ 
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  textAlign: 'center',
+                  paddingRight: '2mm'
+                }}>
+                  {getFullServiceName(tagData.serviceType)}
+                </span>
+                
+                {/* Token - Absolute Right */}
+                <span style={{ 
+                  position: 'absolute',
+                  right: '1mm',
+                  whiteSpace: 'nowrap',
+                  fontSize: '0.9rem',
+                  fontWeight: '700'
+                }}>
+                  {currentToken}/{totalTokens}
+                </span>
               </div>
 
-              {/* Receiving Date (Pickup Date) */}
+              {/* Receiving Date (Pickup Date) - Centered */}
               <div style={{ 
-                fontSize: '0.85rem',
+                fontSize: '0.95rem',
                 width: '100%',
-                textAlign: 'left',
+                textAlign: 'center',
                 color: '#444',
-                fontWeight: '600',
-                lineHeight: '1.1',
-                paddingLeft: '1mm'
+                fontWeight: '700',
+                lineHeight: '1.1'
               }}>
                 {formatDate(tagData.pickupDate)}
               </div>
 
-              {/* Garment & Token Number on SAME LINE */}
+              {/* Garment - Centered (No Token) */}
               <div style={{ 
                 width: '100%',
-                display: 'flex', 
-                justifyContent: 'space-between',
-                fontSize: '0.9rem',
-                fontWeight: '700',
+                textAlign: 'center',
+                fontSize: '1rem',
+                fontWeight: '800',
                 color: '#333',
-                lineHeight: '1.1',
-                padding: '0 1mm'
+                lineHeight: '1.1'
               }}>
-                <span>Garment</span>
-                <span>{currentToken}/{totalTokens}</span>
+                Garment
               </div>
 
-              {/* Delivery Date */}
+              {/* Delivery Date - Centered */}
               <div style={{ 
-                fontSize: '0.85rem',
+                fontSize: '0.95rem',
                 width: '100%',
-                textAlign: 'left',
+                textAlign: 'center',
                 color: '#444',
-                fontWeight: '600',
-                lineHeight: '1.1',
-                paddingLeft: '1mm'
+                fontWeight: '700',
+                lineHeight: '1.1'
               }}>
                 {formatDate(tagData.deliveryDate)}
               </div>
