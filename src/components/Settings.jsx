@@ -23,7 +23,7 @@ const Settings = () => {
     items: []
   });
 
-  const [orderCounter, setOrderCounter] = useState(0);
+  const [totalOrders, setTotalOrders] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [logoFile, setLogoFile] = useState(null);
@@ -44,14 +44,9 @@ const Settings = () => {
           setSettings(prev => ({ ...prev, ...businessSnap.data() }));
         }
 
-        // Load order counter
-        const counterSnap = await getDoc(doc(db, 'settings', 'orderCounter'));
-        if (counterSnap.exists()) {
-          setOrderCounter(counterSnap.data().currentId || 0);
-        } else {
-          await setDoc(doc(db, 'settings', 'orderCounter'), { currentId: 0 });
-          setOrderCounter(0);
-        }
+        // Load existing orders count
+        const bookingsSnapshot = await getDocs(collection(db, 'Bookings'));
+        setTotalOrders(bookingsSnapshot.size);
 
         // Load service configuration
         const serviceSnap = await getDoc(doc(db, 'settings', 'serviceConfig'));
@@ -181,14 +176,12 @@ const Settings = () => {
   // Order ID Reset Function - Enhanced to delete all orders
   const deleteAllOrders = async () => {
     try {
-      // Get all documents from the Bookings collection
       const bookingsSnapshot = await getDocs(collection(db, 'Bookings'));
       
       if (bookingsSnapshot.empty) {
         return { deletedCount: 0 };
       }
 
-      // Use batch operations for efficient deletion
       const batch = writeBatch(db);
       let deleteCount = 0;
 
@@ -197,7 +190,6 @@ const Settings = () => {
         deleteCount++;
       });
 
-      // Commit the batch
       await batch.commit();
       
       return { deletedCount: deleteCount };
@@ -208,7 +200,6 @@ const Settings = () => {
   };
 
   const handleResetOrderId = async () => {
-    // First confirmation
     const confirmReset = window.confirm(
       '⚠️ CRITICAL WARNING: This action will:\n\n' +
       '• Delete ALL existing orders from the database\n' +
@@ -219,7 +210,6 @@ const Settings = () => {
 
     if (!confirmReset) return;
 
-    // Second confirmation with explicit typing requirement
     const confirmationText = prompt(
       '🚨 FINAL CONFIRMATION\n\n' +
       'This will permanently delete ALL orders and reset the counter.\n\n' +
@@ -233,10 +223,8 @@ const Settings = () => {
 
     setSaving(true);
     try {
-      // Delete all existing orders
       const { deletedCount } = await deleteAllOrders();
       
-      // Reset the order counter
       await setDoc(doc(db, 'settings', 'orderCounter'), {
         currentId: 0,
         lastReset: serverTimestamp(),
@@ -244,7 +232,7 @@ const Settings = () => {
         deletedOrdersCount: deletedCount
       });
       
-      setOrderCounter(0);
+      setTotalOrders(0);
       setMessage({ 
         type: 'success', 
         text: `Order system reset successfully! Deleted ${deletedCount} orders. Next order will be 0001.` 
@@ -545,7 +533,6 @@ const Settings = () => {
           </div>
         )}
 
-        {/* Add custom scrollbar styles */}
         <style>
           {`
             .price-table-wrapper::-webkit-scrollbar {
@@ -562,7 +549,6 @@ const Settings = () => {
             .price-table-wrapper::-webkit-scrollbar-thumb:hover {
               background: #4f46e5;
             }
-            /* Firefox */
             .price-table-wrapper {
               scrollbar-width: thin;
               scrollbar-color: #6366f1 #f1f1f1;
@@ -742,7 +728,7 @@ const Settings = () => {
               borderRadius: '0.5rem'
             }}>
               <h4 style={{ fontSize: '1.125rem', fontWeight: 500, color: '#92400e', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span>⚙️</span> Order ID Management
+                <span>⚙️</span> Order Management
               </h4>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -754,14 +740,11 @@ const Settings = () => {
                   gap: '1rem'
                 }}>
                   <div>
-                    <p style={{ fontSize: '0.875rem', color: '#78350f', marginBottom: '0.25rem' }}>
-                      Current Order Counter:
+                    <p style={{ fontSize: '0.875rem', color: '#78350f', marginBottom: '0.5rem' }}>
+                      Total Orders Placed:
                     </p>
-                    <p style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#92400e' }}>
-                      {String(orderCounter).padStart(4, '0')}
-                    </p>
-                    <p style={{ fontSize: '0.75rem', color: '#78350f', marginTop: '0.25rem' }}>
-                      Next Order ID will be: {String(orderCounter + 1).padStart(4, '0')}
+                    <p style={{ fontSize: '2rem', fontWeight: 'bold', color: '#92400e' }}>
+                      {totalOrders}
                     </p>
                   </div>
 
@@ -943,7 +926,6 @@ const Settings = () => {
                   borderRadius: '.5rem', 
                   overflow: 'hidden'
                 }}>
-                  {/* Table wrapper with horizontal scroll */}
                   <div 
                     className="price-table-wrapper"
                     style={{ 
@@ -1057,7 +1039,6 @@ const Settings = () => {
                 Cloth Types
               </h4>
 
-              {/* New Cloth Type Card */}
               <div style={{
                 padding: '2rem',
                 backgroundColor: '#f8fafc',
