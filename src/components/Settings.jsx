@@ -33,78 +33,6 @@ const Settings = () => {
 
   const [newService, setNewService] = useState({ id: '', name: '' });
   const [newCloth, setNewCloth] = useState({ id: '', name: '', icon: '', iconUrl: '' });
-  
-  // Refs for scrolling
-  const tableScrollRef = useRef(null);
-  const [scrollInfo, setScrollInfo] = useState({ 
-    scrollLeft: 0, 
-    scrollWidth: 0, 
-    clientWidth: 0,
-    isDragging: false,
-    startX: 0,
-    scrollLeftStart: 0
-  });
-
-  // Handle scroll event to update custom scrollbar
-  const handleTableScroll = () => {
-    if (tableScrollRef.current) {
-      setScrollInfo(prev => ({
-        ...prev,
-        scrollLeft: tableScrollRef.current.scrollLeft,
-        scrollWidth: tableScrollRef.current.scrollWidth,
-        clientWidth: tableScrollRef.current.clientWidth
-      }));
-    }
-  };
-
-  // Initialize scroll info when the table is rendered
-  useEffect(() => {
-    if (activeTab === 'services' && tableScrollRef.current) {
-      handleTableScroll();
-    }
-  }, [activeTab, clothConfig.items.length, serviceConfig.serviceTypes.length]);
-
-  // Custom scrollbar events
-  const handleScrollStart = (e) => {
-    setScrollInfo(prev => ({
-      ...prev,
-      isDragging: true,
-      startX: e.clientX,
-      scrollLeftStart: prev.scrollLeft
-    }));
-  };
-
-  const handleScrollMove = (e) => {
-    if (!scrollInfo.isDragging) return;
-    
-    const dx = e.clientX - scrollInfo.startX;
-    const scrollRatio = scrollInfo.scrollWidth / scrollInfo.clientWidth;
-    const scrollAmount = dx * scrollRatio;
-    
-    if (tableScrollRef.current) {
-      tableScrollRef.current.scrollLeft = scrollInfo.scrollLeftStart + scrollAmount;
-    }
-  };
-
-  const handleScrollEnd = () => {
-    setScrollInfo(prev => ({ ...prev, isDragging: false }));
-  };
-
-  // Add global mouse event listeners for smooth scrolling
-  useEffect(() => {
-    if (scrollInfo.isDragging) {
-      document.addEventListener('mousemove', handleScrollMove);
-      document.addEventListener('mouseup', handleScrollEnd);
-    } else {
-      document.removeEventListener('mousemove', handleScrollMove);
-      document.removeEventListener('mouseup', handleScrollEnd);
-    }
-    
-    return () => {
-      document.removeEventListener('mousemove', handleScrollMove);
-      document.removeEventListener('mouseup', handleScrollEnd);
-    };
-  }, [scrollInfo.isDragging]);
 
   // Load initial data
   useEffect(() => {
@@ -617,6 +545,31 @@ const Settings = () => {
           </div>
         )}
 
+        {/* Add custom scrollbar styles */}
+        <style>
+          {`
+            .price-table-wrapper::-webkit-scrollbar {
+              height: 12px;
+            }
+            .price-table-wrapper::-webkit-scrollbar-track {
+              background: #f1f1f1;
+              border-radius: 10px;
+            }
+            .price-table-wrapper::-webkit-scrollbar-thumb {
+              background: #6366f1;
+              border-radius: 10px;
+            }
+            .price-table-wrapper::-webkit-scrollbar-thumb:hover {
+              background: #4f46e5;
+            }
+            /* Firefox */
+            .price-table-wrapper {
+              scrollbar-width: thin;
+              scrollbar-color: #6366f1 #f1f1f1;
+            }
+          `}
+        </style>
+
         {/* Tabs */}
         <div style={{ marginBottom: '2rem', borderBottom: '2px solid var(--gray-200)' }}>
           <div style={{ display: 'flex', gap: '1rem' }}>
@@ -988,18 +941,15 @@ const Settings = () => {
                 <div style={{ 
                   border: '1px solid var(--gray-200)', 
                   borderRadius: '.5rem', 
-                  overflow: 'hidden',
-                  position: 'relative'
+                  overflow: 'hidden'
                 }}>
                   {/* Table wrapper with horizontal scroll */}
                   <div 
-                    ref={tableScrollRef}
-                    onScroll={handleTableScroll}
+                    className="price-table-wrapper"
                     style={{ 
                       overflowX: 'auto', 
                       width: '100%',
-                      position: 'relative',
-                      paddingBottom: '5px'
+                      overflowY: 'hidden'
                     }}
                   >
                     <table style={{ 
@@ -1070,38 +1020,6 @@ const Settings = () => {
                       </tbody>
                     </table>
                   </div>
-
-                  {/* Custom scrollbar */}
-                  {clothConfig.items.length > 3 && scrollInfo.scrollWidth > scrollInfo.clientWidth && (
-                    <div style={{
-                      padding: '0.5rem 0',
-                      marginTop: '0.5rem',
-                      position: 'relative'
-                    }}>
-                      <div style={{
-                        height: '6px',
-                        backgroundColor: '#e5e7eb',
-                        borderRadius: '999px',
-                        position: 'relative',
-                        cursor: 'pointer'
-                      }}>
-                        <div 
-                          onMouseDown={handleScrollStart}
-                          style={{
-                            position: 'absolute',
-                            left: `${(scrollInfo.scrollLeft / (scrollInfo.scrollWidth - scrollInfo.clientWidth)) * 100}%`,
-                            width: `${(scrollInfo.clientWidth / scrollInfo.scrollWidth) * 100}%`,
-                            height: '100%',
-                            backgroundColor: '#6366f1',
-                            borderRadius: '999px',
-                            cursor: 'grab',
-                            transform: 'translateX(-0%)',
-                            transition: scrollInfo.isDragging ? 'none' : 'left 0.1s ease-out'
-                          }}
-                        />
-                      </div>
-                    </div>
-                  )}
                 </div>
               ) : (
                 <div style={{ textAlign: 'center', padding: '2rem 0', backgroundColor: 'var(--gray-50)', borderRadius: '.5rem' }}>
