@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import RevenueChart from './RevenueChart';
 
-const Dashboard = ({ setActiveSection, setOrdersFilter }) => {
+const Dashboard = ({ setOrdersFilter }) => {
+  const navigate = useNavigate();
   const [stats, setStats] = useState([]);
   const [recentOrders, setRecentOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  
-  const startOfYear = new Date(new Date().getFullYear(), 0, 1);
-  const endOfYear = new Date(new Date().getFullYear(), 11, 31, 23, 59, 59);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -61,18 +60,24 @@ const Dashboard = ({ setActiveSection, setOrdersFilter }) => {
           order.status && order.status.toLowerCase() === 'completed'
         );
 
-        const currentMonthRevenue = currentMonthCompletedOrders.reduce((sum, order) => sum + (order.totalCost || 0), 0);
-        const lastMonthRevenue = lastMonthCompletedOrders.reduce((sum, order) => sum + (order.totalCost || 0), 0);
+        // ✅ Calculate revenue from completed orders with GST
+        const currentMonthRevenue = currentMonthCompletedOrders.reduce((sum, order) => {
+          const total = parseFloat(order.grandTotal) || parseFloat(order.totalCost) || 0;
+          return sum + total;
+        }, 0);
+
+        const lastMonthRevenue = lastMonthCompletedOrders.reduce((sum, order) => {
+          const total = parseFloat(order.grandTotal) || parseFloat(order.totalCost) || 0;
+          return sum + total;
+        }, 0);
 
         const totalOrders = orders.length;
         
-        // ✅ Calculate revenue only from completed orders
-        const totalRevenue = completedOrders.reduce((sum, order) => sum + (order.totalCost || 0), 0);
-
-        // ✅ GST calculation on completed orders only
-        const gstRate = 0.18;
-        const gstAmount = totalRevenue * gstRate;
-        const grandTotalRevenue = totalRevenue + gstAmount;
+        // ✅ Calculate total revenue from completed orders (with GST)
+        const totalRevenue = completedOrders.reduce((sum, order) => {
+          const total = parseFloat(order.grandTotal) || parseFloat(order.totalCost) || 0;
+          return sum + total;
+        }, 0);
 
         const totalCustomers = customerSnapshot.size;
         
@@ -89,22 +94,34 @@ const Dashboard = ({ setActiveSection, setOrdersFilter }) => {
         // ✅ Function to navigate to all orders
         const handleTotalOrdersClick = () => {
           if (setOrdersFilter) setOrdersFilter('all');
-          if (setActiveSection) setActiveSection('orders');
+          navigate('/orders');
         };
 
         // ✅ Function to navigate to pending orders
         const handlePendingOrdersClick = () => {
           if (setOrdersFilter) setOrdersFilter('pending');
-          if (setActiveSection) setActiveSection('orders');
+          navigate('/orders');
         };
 
-        // ✅ Updated stats with Total Orders clickable
+        // ✅ Function to navigate to urgent orders
+        const handleUrgentOrdersClick = () => {
+          if (setOrdersFilter) setOrdersFilter('urgent');
+          navigate('/orders');
+        };
+
+        // ✅ Calculate urgent orders count
+        const urgentOrders = orders.filter(order => 
+          order.urgentDelivery === true && 
+          (!order.status || order.status.toLowerCase() === 'pending')
+        ).length;
+
+        // ✅ Updated stats with clickable cards
         setStats([
           {
             title: 'Total Orders',
             value: totalOrders.toLocaleString(),
             change: `${calculatePercentageChange(currentMonthOrders.length, lastMonthOrders.length)}% from last month`,
-            changeColor: 'var(--green-600)',
+            changeColor: calculatePercentageChange(currentMonthOrders.length, lastMonthOrders.length) >= 0 ? 'var(--green-600)' : 'var(--red-600)',
             icon: '📦',
             bgColor: 'var(--blue-100)',
             clickable: true,
@@ -113,20 +130,29 @@ const Dashboard = ({ setActiveSection, setOrdersFilter }) => {
           {
             title: 'Pending Orders',
             value: pendingOrders,
-            change: 'Click to view details',
-            changeColor: 'var(--red-600)',
+            change: urgentOrders > 0 ? `${urgentOrders} urgent orders` : 'No urgent orders',
+            changeColor: urgentOrders > 0 ? 'var(--red-600)' : 'var(--green-600)',
             icon: '⏳',
-            bgColor: 'var(--red-100)',
+            bgColor: 'var(--yellow-100)',
             clickable: true,
             onClick: handlePendingOrdersClick
           },
           {
             title: 'Revenue (Completed)',
-            value: `₹ ${grandTotalRevenue.toLocaleString()}`,
+            value: `₹ ${totalRevenue.toLocaleString()}`,
             change: `${calculatePercentageChange(currentMonthRevenue, lastMonthRevenue)}% from last month`,
-            changeColor: 'var(--green-600)',
+            changeColor: calculatePercentageChange(currentMonthRevenue, lastMonthRevenue) >= 0 ? 'var(--green-600)' : 'var(--red-600)',
             icon: '💰',
             bgColor: 'var(--green-100)',
+            clickable: false
+          },
+          {
+            title: 'Total Customers',
+            value: totalCustomers.toLocaleString(),
+            change: 'All time',
+            changeColor: 'var(--gray-600)',
+            icon: '👥',
+            bgColor: 'var(--purple-100)',
             clickable: false
           }
         ]);
@@ -134,13 +160,33 @@ const Dashboard = ({ setActiveSection, setOrdersFilter }) => {
         // ✅ FIXED: Updated sorting to work with new 4-digit ID format
         const recentOrdersData = orders
           .sort((a, b) => parseInt(b.id) - parseInt(a.id))
-          .slice(0, 3)
+          .slice(0, 5)
           .map(order => ({
             id: `#${order.id}`,
-            customer: `${order.customerName} - ${order.serviceType}`,
+            customer: order.customerName || 'N/A',
+            service: order.serviceType || 'N/A',
             status: order.status || 'Pending',
-            statusColor: order.status && order.status.toLowerCase() === 'completed' ? 'var(--green-100)' : 'var(--yellow-100)',
-            textColor: order.status && order.status.toLowerCase() === 'completed' ? 'var(--green-600)' : 'var(--yellow-600)'
+            urgent: order.urgentDelivery || false,
+            statusColor: 
+              !order.status || order.status.toLowerCase() === 'pending' 
+                ? 'var(--yellow-100)' 
+                : order.status.toLowerCase() === 'in-progress'
+                ? 'var(--blue-100)'
+                : order.status.toLowerCase() === 'ready'
+                ? 'var(--green-100)'
+                : order.status.toLowerCase() === 'completed'
+                ? 'var(--gray-100)'
+                : 'var(--red-100)',
+            textColor: 
+              !order.status || order.status.toLowerCase() === 'pending' 
+                ? 'var(--yellow-600)' 
+                : order.status.toLowerCase() === 'in-progress'
+                ? 'var(--blue-600)'
+                : order.status.toLowerCase() === 'ready'
+                ? 'var(--green-600)'
+                : order.status.toLowerCase() === 'completed'
+                ? 'var(--gray-600)'
+                : 'var(--red-600)'
           }));
 
         setRecentOrders(recentOrdersData);
@@ -152,7 +198,7 @@ const Dashboard = ({ setActiveSection, setOrdersFilter }) => {
     };
 
     fetchData();
-  }, [setActiveSection, setOrdersFilter]);
+  }, [navigate, setOrdersFilter]);
 
   if (loading) {
     return (
@@ -164,7 +210,26 @@ const Dashboard = ({ setActiveSection, setOrdersFilter }) => {
         fontSize: '1.125rem',
         color: 'var(--gray-600)'
       }}>
-        Loading dashboard...
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            width: '50px',
+            height: '50px',
+            border: '4px solid #e5e7eb',
+            borderTop: '4px solid #3b82f6',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            margin: '0 auto 1rem'
+          }}></div>
+          <p>Loading dashboard...</p>
+        </div>
+        <style>
+          {`
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          `}
+        </style>
       </div>
     );
   }
@@ -190,7 +255,7 @@ const Dashboard = ({ setActiveSection, setOrdersFilter }) => {
               border: '1px solid var(--gray-200)',
               cursor: stat.clickable ? 'pointer' : 'default',
               transition: 'all 0.2s',
-              transform: stat.clickable ? 'scale(1)' : 'none',
+              transform: 'scale(1)',
               position: 'relative'
             }}
             onMouseEnter={(e) => {
@@ -223,7 +288,7 @@ const Dashboard = ({ setActiveSection, setOrdersFilter }) => {
               alignItems: 'center',
               justifyContent: 'space-between'
             }}>
-              <div>
+              <div style={{ flex: 1 }}>
                 <p style={{
                   fontSize: '0.875rem',
                   fontWeight: '500',
@@ -285,13 +350,34 @@ const Dashboard = ({ setActiveSection, setOrdersFilter }) => {
           padding: '1.5rem',
           border: '1px solid var(--gray-200)'
         }}>
-          <h3 style={{
-            fontSize: '1.125rem',
-            fontWeight: '600',
-            color: 'var(--gray-800)',
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
             marginBottom: '1rem'
-          }}>Recent Orders</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          }}>
+            <h3 style={{
+              fontSize: '1.125rem',
+              fontWeight: '600',
+              color: 'var(--gray-800)',
+              margin: 0
+            }}>Recent Orders</h3>
+            <button
+              onClick={() => navigate('/orders')}
+              style={{
+                fontSize: '0.875rem',
+                color: 'var(--primary)',
+                backgroundColor: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                fontWeight: '500',
+                textDecoration: 'underline'
+              }}
+            >
+              View All →
+            </button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {recentOrders.length > 0 ? (
               recentOrders.map((order, index) => (
                 <div key={index} style={{
@@ -299,25 +385,50 @@ const Dashboard = ({ setActiveSection, setOrdersFilter }) => {
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   padding: '0.75rem',
-                  backgroundColor: 'var(--gray-50)',
-                  borderRadius: '0.5rem'
+                  backgroundColor: order.urgent ? '#fff3e0' : 'var(--gray-50)',
+                  borderRadius: '0.5rem',
+                  borderLeft: order.urgent ? '4px solid #ff6b35' : 'none'
                 }}>
-                  <div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <p style={{
+                        fontWeight: '600',
+                        color: 'var(--gray-900)',
+                        fontSize: '0.9rem',
+                        margin: 0
+                      }}>{order.id}</p>
+                      {order.urgent && (
+                        <span style={{
+                          fontSize: '0.65rem',
+                          backgroundColor: '#ff6b35',
+                          color: 'white',
+                          padding: '0.125rem 0.375rem',
+                          borderRadius: '0.25rem',
+                          fontWeight: 'bold'
+                        }}>
+                          URGENT
+                        </span>
+                      )}
+                    </div>
                     <p style={{
-                      fontWeight: '500',
-                      color: 'var(--gray-900)'
-                    }}>{order.id}</p>
-                    <p style={{
-                      fontSize: '0.875rem',
-                      color: 'var(--gray-600)'
+                      fontSize: '0.8rem',
+                      color: 'var(--gray-600)',
+                      margin: '0.25rem 0 0 0'
                     }}>{order.customer}</p>
+                    <p style={{
+                      fontSize: '0.75rem',
+                      color: 'var(--gray-500)',
+                      margin: '0.125rem 0 0 0'
+                    }}>{order.service}</p>
                   </div>
                   <span style={{
                     padding: '0.25rem 0.75rem',
                     backgroundColor: order.statusColor,
                     color: order.textColor,
-                    fontSize: '0.875rem',
-                    borderRadius: '9999px'
+                    fontSize: '0.75rem',
+                    borderRadius: '9999px',
+                    fontWeight: '500',
+                    whiteSpace: 'nowrap'
                   }}>{order.status}</span>
                 </div>
               ))

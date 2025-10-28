@@ -1,18 +1,19 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { getStorage, ref, getDownloadURL } from 'firebase/storage';
 
-const Sidebar = ({ activeSection, setActiveSection }) => {
+const Sidebar = ({ activeSection, setShowProfile }) => {
+  const navigate = useNavigate();
+  
   const navItems = [
-    { id: 'dashboard', icon: '📊', label: 'Dashboard' },
-    { id: 'booking', icon: '➕', label: 'New Booking' },
-    { id: 'orders', icon: '📦', label: 'Order Tracker' },
-    { id: 'editorder', icon: '✏️', label: 'Edit Order' },
-    { id: 'tags', icon: '🏷️', label: 'Tag Generator' },
-    { id: 'customers', icon: '👥', label: 'Customers' },
-    { id: 'billing', icon: '💰', label: 'Bill Generator' },
-    { id: 'settings', icon: '⚙️', label: 'Settings' }
+    { id: 'dashboard', icon: '📊', label: 'Dashboard', path: '/dashboard' },
+    { id: 'booking', icon: '➕', label: 'New Booking', path: '/booking' },
+    { id: 'orders', icon: '📦', label: 'Order Tracker', path: '/orders' },
+    { id: 'editorder', icon: '✏️', label: 'Edit Order', path: '/editorder' },
+    { id: 'tags', icon: '🏷️', label: 'Tag Generator', path: '/tags' },
+    { id: 'customers', icon: '👥', label: 'Customers', path: '/customers' },
+    { id: 'billing', icon: '💰', label: 'Bill Generator', path: '/billing' }
   ];
 
   const [businessName, setCompanyName] = useState('Loading...');
@@ -26,12 +27,10 @@ const Sidebar = ({ activeSection, setActiveSection }) => {
         if (settingsSnap.exists()) {
           const data = settingsSnap.data();
           setCompanyName(data.businessName || 'LaundryPro');
-
+          
+          // Direct URL usage - no need for getDownloadURL if logoUrl is already a full URL
           if (data.logoUrl) {
-            const storage = getStorage();
-            const logoRef = ref(storage, data.logoUrl);
-            const url = await getDownloadURL(logoRef);
-            setLogoUrl(url);
+            setLogoUrl(data.logoUrl);
           }
         } else {
           setCompanyName('LaundryPro');
@@ -45,6 +44,11 @@ const Sidebar = ({ activeSection, setActiveSection }) => {
     fetchCompanyInfo();
   }, []);
 
+  const handleNavigation = (path) => {
+    setShowProfile(false);
+    navigate(path);
+  };
+
   return (
     <div style={{
       width: '256px',
@@ -57,10 +61,10 @@ const Sidebar = ({ activeSection, setActiveSection }) => {
       zIndex: 40,
       display: 'flex',
       flexDirection: 'column',
-      height:'100vh',
-      overflow:'auto',
-      overflowY:'scroll',
-      overflowX:'hidden',  
+      height: '100vh',
+      overflow: 'auto',
+      overflowY: 'scroll',
+      overflowX: 'hidden',  
       scrollbarWidth: 'none',
       msOverflowStyle: 'none',
     }}>
@@ -72,6 +76,7 @@ const Sidebar = ({ activeSection, setActiveSection }) => {
         `}
       </style>
       
+      {/* Header */}
       <div style={{ 
         padding: '1.5rem', 
         borderBottom: '1px solid var(--gray-200)', 
@@ -105,7 +110,14 @@ const Sidebar = ({ activeSection, setActiveSection }) => {
             <img
               src={logoUrl}
               alt="Company Logo"
-              style={{ width: '80%', height: '80%', objectFit: 'contain' }}
+              style={{ 
+                width: '80%', 
+                height: '80%', 
+                objectFit: 'contain' 
+              }}
+              onError={(e) => {
+                e.target.style.display = 'none';
+              }}
             />
           </div>
         )}
@@ -115,6 +127,7 @@ const Sidebar = ({ activeSection, setActiveSection }) => {
         </p>
       </div>
 
+      {/* Navigation */}
       <nav style={{ marginTop: '1.5rem', flex: 1 }}>
         <div style={{ padding: '0.5rem 1.5rem' }}>
           <p style={{
@@ -126,10 +139,10 @@ const Sidebar = ({ activeSection, setActiveSection }) => {
           }}>Main</p>
         </div>
 
-        {navItems.slice(0, 7).map(item => (
+        {navItems.map(item => (
           <button
             key={item.id}
-            onClick={() => setActiveSection(item.id)}
+            onClick={() => handleNavigation(item.path)}
             style={{
               width: '100%',
               textAlign: 'left',
@@ -141,7 +154,9 @@ const Sidebar = ({ activeSection, setActiveSection }) => {
               transition: 'all 0.2s',
               border: 'none',
               cursor: 'pointer',
-              position: 'relative'
+              position: 'relative',
+              fontSize: '0.95rem',
+              fontWeight: activeSection === item.id ? '600' : '400'
             }}
             onMouseEnter={e => {
               if (activeSection !== item.id) {
@@ -158,10 +173,21 @@ const Sidebar = ({ activeSection, setActiveSection }) => {
               {item.icon}
             </span>
             <span>{item.label}</span>
-            {item.id === 'editorder'}
+            {activeSection === item.id && (
+              <span style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: '4px',
+                backgroundColor: 'var(--primary)',
+                borderRadius: '0 4px 4px 0'
+              }}></span>
+            )}
           </button>
         ))}
 
+        {/* System Section */}
         <div style={{ padding: '0.5rem 1.5rem', marginTop: '1.5rem' }}>
           <p style={{
             fontSize: '0.75rem',
@@ -173,7 +199,7 @@ const Sidebar = ({ activeSection, setActiveSection }) => {
         </div>
 
         <button
-          onClick={() => setActiveSection('settings')}
+          onClick={() => handleNavigation('/settings')}
           style={{
             width: '100%',
             textAlign: 'left',
@@ -184,7 +210,10 @@ const Sidebar = ({ activeSection, setActiveSection }) => {
             backgroundColor: activeSection === 'settings' ? 'var(--secondary)' : 'transparent',
             transition: 'all 0.2s',
             border: 'none',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            position: 'relative',
+            fontSize: '0.95rem',
+            fontWeight: activeSection === 'settings' ? '600' : '400'
           }}
           onMouseEnter={e => {
             if (activeSection !== 'settings') {
@@ -199,8 +228,30 @@ const Sidebar = ({ activeSection, setActiveSection }) => {
         >
           <span style={{ marginRight: '0.75rem', fontSize: '1.25rem' }}>⚙️</span>
           Settings
+          {activeSection === 'settings' && (
+            <span style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: '4px',
+              backgroundColor: 'var(--primary)',
+              borderRadius: '0 4px 4px 0'
+            }}></span>
+          )}
         </button>
       </nav>
+
+      {/* Footer */}
+      <div style={{
+        padding: '1rem 1.5rem',
+        borderTop: '1px solid var(--gray-200)',
+        fontSize: '0.75rem',
+        color: 'var(--gray-500)',
+        textAlign: 'center'
+      }}>
+        <p style={{ margin: '0.25rem 0 0 0' }}>© 2025 {businessName}</p>
+      </div>
     </div>
   );
 };
