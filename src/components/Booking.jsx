@@ -206,13 +206,16 @@ const Booking = () => {
   };
 
   const handleItemChange = (item, value) => {
+    const floatValue = parseFloat(value);
+    const finalValue = isNaN(floatValue) ? 0 : Math.max(0, floatValue);
+    
     setFormData(prev => ({
       ...prev,
       items: {
         ...prev.items,
         [item]: {
           ...prev.items[item],
-          quantity: parseInt(value) || 0
+          quantity: finalValue
         }
       }
     }));
@@ -225,7 +228,7 @@ const Booking = () => {
         ...prev.items,
         [itemId]: {
           ...prev.items[itemId],
-          quantity: prev.items[itemId].quantity + 1
+          quantity: parseFloat((prev.items[itemId].quantity + 0.1).toFixed(1))
         }
       }
     }));
@@ -238,7 +241,7 @@ const Booking = () => {
         ...prev.items,
         [itemId]: {
           ...prev.items[itemId],
-          quantity: Math.max(0, prev.items[itemId].quantity - 1)
+          quantity: parseFloat(Math.max(0, prev.items[itemId].quantity - 0.1).toFixed(1))
         }
       }
     }));
@@ -318,7 +321,6 @@ const Booking = () => {
 
       const bookingId = String(maxBookingNum + 1).padStart(4, '0');
 
-      // Save customer data
       await setDoc(doc(db, "customers", formData.phone), {
         name: formData.customerName,
         phone: formData.phone,
@@ -337,7 +339,6 @@ const Booking = () => {
         calculatedGrandTotal = itemsTotal + calculatedSgst + calculatedCgst;
       }
 
-      // Save booking with GST configuration
       await setDoc(doc(db, "Bookings", bookingId), {
         customerName: formData.customerName,
         phone: formData.phone,
@@ -347,21 +348,20 @@ const Booking = () => {
         deliveryDate: formData.deliveryDate,
         instructions: formData.instructions,
         items: selectedItems,
-        totalItems: Object.values(selectedItems).reduce((sum, item) => sum + item.quantity, 0),
-        totalCost: itemsTotal,
+        totalItems: parseFloat(Object.values(selectedItems).reduce((sum, item) => sum + item.quantity, 0).toFixed(1)),
+        totalCost: parseFloat(itemsTotal.toFixed(2)),
         gstEnabled: gstConfig.enabled,
         sgstPercentage: gstConfig.enabled ? gstConfig.sgstPercentage : 0,
         cgstPercentage: gstConfig.enabled ? gstConfig.cgstPercentage : 0,
-        sgst: calculatedSgst.toFixed(2),
-        cgst: calculatedCgst.toFixed(2),
-        grandTotal: calculatedGrandTotal.toFixed(2),
+        sgst: parseFloat(calculatedSgst.toFixed(2)),
+        cgst: parseFloat(calculatedCgst.toFixed(2)),
+        grandTotal: parseFloat(calculatedGrandTotal.toFixed(2)),
         status: 'pending',
         createdAt: new Date()
       });
 
       alert(`Booking created successfully!\nOrder ID: ${bookingId}\nCustomer: ${formData.customerName}${formData.urgentDelivery ? '\nURGENT DELIVERY' : ''}`);
 
-      // Reset form
       const resetItems = Object.keys(formData.items).reduce((acc, item) => {
         acc[item] = { quantity: 0, price: servicePrices[formData.serviceType]?.[item] || 0 };
         return acc;
@@ -566,7 +566,10 @@ const Booking = () => {
                     cursor: 'pointer',
                     backgroundColor: formData.items[item.id]?.quantity > 0 ? 'var(--secondary)' : 'transparent',
                     transition: 'all 0.2s',
-                    textAlign: 'center'
+                    textAlign: 'center',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center'
                   }}
                 >
                   <div style={{ marginBottom: '0.5rem' }}>
@@ -576,90 +579,103 @@ const Booking = () => {
                       style={{ width: '60px', height: '60px', objectFit: 'contain' }} 
                     />
                   </div>    
-                  <p style={{ fontSize: '0.875rem', fontWeight: '500' }}>{item.name}</p>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginTop: '0.25rem' }}>
+                  <p style={{ fontSize: '0.875rem', fontWeight: '500', margin: '0 0 0.25rem 0' }}>{item.name}</p>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--gray-500)', margin: '0 0 0.75rem 0' }}>
                     &#8377; {formData.items[item.id]?.price || 0}
                   </p>
                   
+                  {/* ✅ COMPLETELY SEAMLESS - No Internal Lines */}
                   <div style={{
                     display: 'flex',
-                    alignItems: 'stretch',
+                    alignItems: 'center',
                     justifyContent: 'center',
-                    marginTop: '0.75rem',
-                    border: '1px solid var(--gray-300)',
-                    borderRadius: '0.25rem',
-                    overflow: 'hidden',
-                    width: 'fit-content',
-                    margin: '0.75rem auto 0'
+                    width: '100%'
                   }}>
-                    <button
-                      type="button"
-                      onClick={() => decrementQuantity(item.id)}
-                      style={{
-                        width: '32px',
-                        height: '32px',
-                        padding: '0',
-                        border: 'none',
-                        borderRight: '1px solid var(--gray-300)',
-                        backgroundColor: 'white',
-                        cursor: 'pointer',
-                        fontSize: '1.1rem',
-                        fontWeight: 'bold',
-                        color: 'var(--gray-700)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        transition: 'background-color 0.2s'
-                      }}
-                      onMouseEnter={(e) => e.target.style.backgroundColor = '#f3f4f6'}
-                      onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
-                    >
-                      −
-                    </button>
-                    
-                    <input
-                      type="number"
-                      value={formData.items[item.id]?.quantity || 0}
-                      onChange={(e) => handleItemChange(item.id, e.target.value)}
-                      style={{
-                        width: '50px',
-                        padding: '0.35rem 0.5rem',
-                        border: 'none',
-                        textAlign: 'center',
-                        fontSize: '0.875rem',
-                        outline: 'none',
-                        backgroundColor: 'white',
-                        MozAppearance: 'textfield',
-                        WebkitAppearance: 'none',
-                        appearance: 'none'
-                      }}
-                      min="0"
-                    />
-                    
-                    <button
-                      type="button"
-                      onClick={() => incrementQuantity(item.id)}
-                      style={{
-                        width: '32px',
-                        height: '32px',
-                        padding: '0',
-                        border: 'none',
-                        borderLeft: '1px solid var(--gray-300)',
-                        backgroundColor: 'white',
-                        cursor: 'pointer',
-                        fontSize: '1.1rem',
-                        fontWeight: 'bold',
-                        color: 'var(--gray-700)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        transition: 'background-color 0.2s'
-                      }}
-                      onMouseEnter={(e) => e.target.style.backgroundColor = '#f3f4f6'}
-                      onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
-                    >
-                      +
-                    </button>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'stretch',
+                      border: '1px solid var(--gray-300)',
+                      borderRadius: '0.5rem',
+                      overflow: 'hidden',
+                      backgroundColor: 'white'
+                    }}>
+                      <button
+                        type="button"
+                        onClick={() => decrementQuantity(item.id)}
+                        style={{
+                          width: '48px',
+                          height: '38px',
+                          padding: '0',
+                          margin: '0',
+                          border: '0',
+                          outline: 'none',
+                          backgroundColor: 'transparent',
+                          cursor: 'pointer',
+                          fontSize: '1.4rem',
+                          fontWeight: 'bold',
+                          color: 'var(--gray-700)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'background-color 0.2s',
+                          boxShadow: 'none'
+                        }}
+                        onMouseEnter={(e) => e.target.style.backgroundColor = '#f3f4f6'}
+                        onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                      >
+                        −
+                      </button>
+                      
+                      <input
+                        type="number"
+                        value={formData.items[item.id]?.quantity.toFixed(1) || '0.0'}
+                        onChange={(e) => handleItemChange(item.id, e.target.value)}
+                        style={{
+                          width: '50px',
+                          height: '38px',
+                          padding: '0',
+                          margin: '0',
+                          border: '0',
+                          outline: 'none',
+                          textAlign: 'center',
+                          fontSize: '0.875rem',
+                          backgroundColor: 'white',
+                          MozAppearance: 'textfield',
+                          WebkitAppearance: 'none',
+                          appearance: 'none',
+                          boxShadow: 'none'
+                        }}
+                        step="0.1"
+                        min="0"
+                      />
+                      
+                      <button
+                        type="button"
+                        onClick={() => incrementQuantity(item.id)}
+                        style={{
+                          width: '48px',
+                          height: '38px',
+                          padding: '0',
+                          margin: '0',
+                          border: '0',
+                          outline: 'none',
+                          backgroundColor: 'transparent',
+                          cursor: 'pointer',
+                          fontSize: '1.4rem',
+                          fontWeight: 'bold',
+                          color: 'var(--gray-700)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'background-color 0.2s',
+                          boxShadow: 'none'
+                        }}
+                        onMouseEnter={(e) => e.target.style.backgroundColor = '#f3f4f6'}
+                        onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -689,7 +705,7 @@ const Booking = () => {
                 marginBottom: '0.5rem'
               }}>
                 <span style={{ fontWeight: '500', color: 'var(--gray-700)' }}>Total Items:</span>
-                <span style={{ fontWeight: 'bold', fontSize: '1.125rem' }}>{totalItems}</span>
+                <span style={{ fontWeight: 'bold', fontSize: '1.125rem' }}>{totalItems.toFixed(1)}</span>
               </div>
               <div style={{
                 display: 'flex',
