@@ -228,7 +228,9 @@ const Booking = () => {
         ...prev.items,
         [itemId]: {
           ...prev.items[itemId],
-          quantity: parseFloat((prev.items[itemId].quantity + 0.1).toFixed(1))
+          quantity: itemId === 'clothsPerKg' 
+            ? parseFloat((prev.items[itemId].quantity + 0.1).toFixed(1))
+            : Math.round(prev.items[itemId].quantity + 1)
         }
       }
     }));
@@ -241,7 +243,9 @@ const Booking = () => {
         ...prev.items,
         [itemId]: {
           ...prev.items[itemId],
-          quantity: parseFloat(Math.max(0, prev.items[itemId].quantity - 0.1).toFixed(1))
+          quantity: itemId === 'clothsPerKg'
+            ? parseFloat(Math.max(0, prev.items[itemId].quantity - 0.1).toFixed(1))
+            : Math.max(0, Math.round(prev.items[itemId].quantity - 1))
         }
       }
     }));
@@ -584,7 +588,6 @@ const Booking = () => {
                     &#8377; {formData.items[item.id]?.price || 0}
                   </p>
                   
-                  {/* ✅ COMPLETELY SEAMLESS - No Internal Lines */}
                   <div style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -628,7 +631,10 @@ const Booking = () => {
                       
                       <input
                         type="number"
-                        value={formData.items[item.id]?.quantity.toFixed(1) || '0.0'}
+                        value={item.id === 'clothsPerKg' 
+                          ? formData.items[item.id]?.quantity.toFixed(1) || '0.0'
+                          : Math.round(formData.items[item.id]?.quantity) || '0'
+                        }
                         onChange={(e) => handleItemChange(item.id, e.target.value)}
                         style={{
                           width: '50px',
@@ -645,7 +651,7 @@ const Booking = () => {
                           appearance: 'none',
                           boxShadow: 'none'
                         }}
-                        step="0.1"
+                        step={item.id === 'clothsPerKg' ? "0.1" : "1"}
                         min="0"
                       />
                       
