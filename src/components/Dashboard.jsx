@@ -145,15 +145,6 @@ const Dashboard = ({ setOrdersFilter }) => {
             icon: '💰',
             bgColor: 'var(--green-100)',
             clickable: false
-          },
-          {
-            title: 'Total Customers',
-            value: totalCustomers.toLocaleString(),
-            change: 'All time',
-            changeColor: 'var(--gray-600)',
-            icon: '👥',
-            bgColor: 'var(--purple-100)',
-            clickable: false
           }
         ]);
 
