@@ -381,13 +381,13 @@ const EditOrder = () => {
         instructions: editedOrder.instructions || '',
         items: editedOrder.items || {},
         totalItems: totals.totalItems,
-        totalCost: totals.totalCost,
+        totalCost: parseFloat(totals.totalCost.toFixed(2)),
         gstEnabled: gstConfig.enabled,
         sgstPercentage: gstConfig.enabled ? gstConfig.sgstPercentage : 0,
         cgstPercentage: gstConfig.enabled ? gstConfig.cgstPercentage : 0,
-        sgst: totals.sgst.toFixed(2),
-        cgst: totals.cgst.toFixed(2),
-        grandTotal: totals.grandTotal.toFixed(2),
+        sgst: parseFloat(totals.sgst.toFixed(2)),
+        cgst: parseFloat(totals.cgst.toFixed(2)),
+        grandTotal: parseFloat(totals.grandTotal.toFixed(2)),
         lastModified: Timestamp.now(),
         status: 'pending',
         urgentDelivery: editedOrder.urgentDelivery || false
@@ -398,7 +398,16 @@ const EditOrder = () => {
       setPendingOrders(prev => 
         prev.map(order => 
           order.id === selectedOrder.id 
-            ? { ...editedOrder, ...totals, id: selectedOrder.id, lastModified: new Date() } 
+            ? { 
+                ...editedOrder, 
+                totalItems: totals.totalItems,
+                totalCost: parseFloat(totals.totalCost.toFixed(2)),
+                sgst: parseFloat(totals.sgst.toFixed(2)),
+                cgst: parseFloat(totals.cgst.toFixed(2)),
+                grandTotal: parseFloat(totals.grandTotal.toFixed(2)),
+                id: selectedOrder.id, 
+                lastModified: new Date() 
+              } 
             : order
         )
       );
@@ -825,7 +834,7 @@ const EditOrder = () => {
                             />
                           </td>
                           <td style={styles.td}>
-                            <strong>₹{((details.quantity || 0) * (details.price || 0)).toFixed(2)}</strong>
+                            <strong>₹{parseFloat((details.quantity || 0) * (details.price || 0)).toFixed(2)}</strong>
                           </td>
                           <td style={styles.td}>
                             <button
@@ -866,7 +875,7 @@ const EditOrder = () => {
                         ...styles.td, 
                         fontWeight: 'bold'
                       }}>
-                        ₹{(editedOrder.totalCost || 0).toFixed(2)}
+                        ₹{parseFloat(editedOrder.totalCost || 0).toFixed(2)}
                       </td>
                     </tr>
                     {gstConfig.enabled && (
@@ -880,7 +889,7 @@ const EditOrder = () => {
                             SGST ({gstConfig.sgstPercentage}%):
                           </td>
                           <td colSpan="2" style={styles.td}>
-                            ₹{(editedOrder.sgst || 0).toFixed(2)}
+                            ₹{parseFloat(editedOrder.sgst || 0).toFixed(2)}
                           </td>
                         </tr>
                         <tr>
@@ -892,7 +901,7 @@ const EditOrder = () => {
                             CGST ({gstConfig.cgstPercentage}%):
                           </td>
                           <td colSpan="2" style={styles.td}>
-                            ₹{(editedOrder.cgst || 0).toFixed(2)}
+                            ₹{parseFloat(editedOrder.cgst || 0).toFixed(2)}
                           </td>
                         </tr>
                       </>
@@ -912,7 +921,7 @@ const EditOrder = () => {
                         fontSize: '1.125rem',
                         color: 'var(--primary)'
                       }}>
-                        ₹{(editedOrder.grandTotal || 0).toFixed(2)}
+                        ₹{parseFloat(editedOrder.grandTotal || 0).toFixed(2)}
                       </td>
                     </tr>
                   </tfoot>
