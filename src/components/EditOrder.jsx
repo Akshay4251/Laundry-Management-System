@@ -34,6 +34,11 @@ const EditOrder = () => {
   const [servicePrices, setServicePrices] = useState({});
   const [availableServices, setAvailableServices] = useState([]);
   const [clothingItems, setClothingItems] = useState([]);
+  const [gstConfig, setGstConfig] = useState({
+    enabled: true,
+    sgstPercentage: 9,
+    cgstPercentage: 9
+  });
 
   const imageMap = {
     shirt, tshirt, pant, starch, saree: sareeimg, blouse, panjabi: punjabi,
@@ -71,6 +76,12 @@ const EditOrder = () => {
 
   const fetchConfiguration = async () => {
     try {
+      // Fetch GST configuration
+      const gstDoc = await getDoc(doc(db, "settings", "gstConfig"));
+      if (gstDoc.exists()) {
+        setGstConfig(gstDoc.data());
+      }
+
       // Fetch service configuration
       const serviceDoc = await getDoc(doc(db, "settings", "serviceConfig"));
       let services = {};
@@ -196,9 +207,6 @@ const EditOrder = () => {
         };
       });
 
-      console.log('All orders:', allOrders);
-      console.log('Status values:', allOrders.map(o => o.status));
-
       const pendingOrdersList = allOrders
         .filter(order => {
           const status = order.status?.toLowerCase() || '';
@@ -220,6 +228,35 @@ const EditOrder = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Helper function to calculate totals with GST
+  const calculateTotals = (items) => {
+    let totalItems = 0;
+    let totalCost = 0;
+    
+    Object.values(items).forEach(item => {
+      totalItems += item.quantity || 0;
+      totalCost += (item.quantity || 0) * (item.price || 0);
+    });
+
+    let sgst = 0;
+    let cgst = 0;
+    let grandTotal = totalCost;
+
+    if (gstConfig.enabled) {
+      sgst = totalCost * (gstConfig.sgstPercentage / 100);
+      cgst = totalCost * (gstConfig.cgstPercentage / 100);
+      grandTotal = totalCost + sgst + cgst;
+    }
+
+    return {
+      totalItems,
+      totalCost,
+      sgst,
+      cgst,
+      grandTotal
+    };
   };
 
   const handleEditClick = (order) => {
@@ -244,9 +281,12 @@ const EditOrder = () => {
         return acc;
       }, {});
       
+      const totals = calculateTotals(updatedItems);
+      
       setEditedOrder(prev => ({
         ...prev,
-        items: updatedItems
+        items: updatedItems,
+        ...totals
       }));
     }
   };
@@ -255,30 +295,20 @@ const EditOrder = () => {
     const numValue = field === 'quantity' || field === 'price' ? Number(value) || 0 : value;
     
     setEditedOrder(prev => {
-      const updatedOrder = {
-        ...prev,
-        items: {
-          ...prev.items,
-          [itemName]: {
-            ...prev.items[itemName],
-            [field]: numValue
-          }
+      const updatedItems = {
+        ...prev.items,
+        [itemName]: {
+          ...prev.items[itemName],
+          [field]: numValue
         }
       };
       
-      let totalItems = 0;
-      let totalCost = 0;
-      
-      Object.values(updatedOrder.items).forEach(item => {
-        totalItems += item.quantity || 0;
-        totalCost += (item.quantity || 0) * (item.price || 0);
-      });
+      const totals = calculateTotals(updatedItems);
       
       return {
-        ...updatedOrder,
-        totalItems,
-        totalCost,
-        grandTotal: totalCost.toFixed(2)
+        ...prev,
+        items: updatedItems,
+        ...totals
       };
     });
   };
@@ -291,18 +321,6 @@ const EditOrder = () => {
     const currentServiceType = editedOrder.serviceType;
     const itemPrice = servicePrices[currentServiceType]?.[itemId] || 0;
     
-    setEditedOrder(prev => ({
-      ...prev,
-      items: {
-        ...prev.items,
-        [itemId]: {
-          quantity: 1,
-          price: itemPrice
-        }
-      }
-    }));
-
-    // Recalculate totals
     const updatedItems = {
       ...editedOrder.items,
       [itemId]: {
@@ -311,19 +329,12 @@ const EditOrder = () => {
       }
     };
 
-    let totalItems = 0;
-    let totalCost = 0;
-    
-    Object.values(updatedItems).forEach(item => {
-      totalItems += item.quantity || 0;
-      totalCost += (item.quantity || 0) * (item.price || 0);
-    });
+    const totals = calculateTotals(updatedItems);
 
     setEditedOrder(prev => ({
       ...prev,
-      totalItems,
-      totalCost,
-      grandTotal: totalCost.toFixed(2)
+      items: updatedItems,
+      ...totals
     }));
 
     setShowAddItemModal(false);
@@ -333,20 +344,12 @@ const EditOrder = () => {
     setEditedOrder(prev => {
       const { [itemName]: removed, ...remainingItems } = prev.items;
       
-      let totalItems = 0;
-      let totalCost = 0;
-      
-      Object.values(remainingItems).forEach(item => {
-        totalItems += item.quantity || 0;
-        totalCost += (item.quantity || 0) * (item.price || 0);
-      });
+      const totals = calculateTotals(remainingItems);
       
       return {
         ...prev,
         items: remainingItems,
-        totalItems,
-        totalCost,
-        grandTotal: totalCost.toFixed(2)
+        ...totals
       };
     });
   };
@@ -366,6 +369,9 @@ const EditOrder = () => {
     try {
       const orderRef = doc(db, 'Bookings', selectedOrder.id);
       
+      // Recalculate totals to ensure accuracy
+      const totals = calculateTotals(editedOrder.items || {});
+      
       const updateData = {
         customerName: editedOrder.customerName,
         phone: editedOrder.phone,
@@ -374,9 +380,14 @@ const EditOrder = () => {
         serviceType: editedOrder.serviceType,
         instructions: editedOrder.instructions || '',
         items: editedOrder.items || {},
-        totalItems: editedOrder.totalItems || 0,
-        totalCost: editedOrder.totalCost || 0,
-        grandTotal: editedOrder.totalCost || 0,
+        totalItems: totals.totalItems,
+        totalCost: totals.totalCost,
+        gstEnabled: gstConfig.enabled,
+        sgstPercentage: gstConfig.enabled ? gstConfig.sgstPercentage : 0,
+        cgstPercentage: gstConfig.enabled ? gstConfig.cgstPercentage : 0,
+        sgst: totals.sgst.toFixed(2),
+        cgst: totals.cgst.toFixed(2),
+        grandTotal: totals.grandTotal.toFixed(2),
         lastModified: Timestamp.now(),
         status: 'pending',
         urgentDelivery: editedOrder.urgentDelivery || false
@@ -387,7 +398,7 @@ const EditOrder = () => {
       setPendingOrders(prev => 
         prev.map(order => 
           order.id === selectedOrder.id 
-            ? { ...editedOrder, id: selectedOrder.id, lastModified: new Date() } 
+            ? { ...editedOrder, ...totals, id: selectedOrder.id, lastModified: new Date() } 
             : order
         )
       );
@@ -541,7 +552,7 @@ const EditOrder = () => {
                 <th style={styles.th}>Pickup Date</th>
                 <th style={styles.th}>Delivery Date</th>
                 <th style={styles.th}>Total Items</th>
-                <th style={styles.th}>Total Cost</th>
+                <th style={styles.th}>Grand Total</th>
                 <th style={styles.th}>Service</th>
                 <th style={styles.th}>Actions</th>
               </tr>
@@ -592,7 +603,7 @@ const EditOrder = () => {
                       </span>
                     </td>
                     <td style={styles.td}>
-                      <strong>₹{order.grandTotal || order.totalCost || 0}</strong>
+                      <strong>₹{parseFloat(order.grandTotal || order.totalCost || 0).toFixed(2)}</strong>
                     </td>
                     <td style={styles.td}>
                       <span style={{
@@ -814,7 +825,7 @@ const EditOrder = () => {
                             />
                           </td>
                           <td style={styles.td}>
-                            <strong>₹{(details.quantity || 0) * (details.price || 0)}</strong>
+                            <strong>₹{((details.quantity || 0) * (details.price || 0)).toFixed(2)}</strong>
                           </td>
                           <td style={styles.td}>
                             <button
@@ -847,6 +858,49 @@ const EditOrder = () => {
                       <td colSpan="3" style={{ 
                         ...styles.td, 
                         textAlign: 'right', 
+                        fontWeight: '500'
+                      }}>
+                        Subtotal:
+                      </td>
+                      <td colSpan="2" style={{ 
+                        ...styles.td, 
+                        fontWeight: 'bold'
+                      }}>
+                        ₹{(editedOrder.totalCost || 0).toFixed(2)}
+                      </td>
+                    </tr>
+                    {gstConfig.enabled && (
+                      <>
+                        <tr>
+                          <td colSpan="3" style={{ 
+                            ...styles.td, 
+                            textAlign: 'right',
+                            fontSize: '0.875rem'
+                          }}>
+                            SGST ({gstConfig.sgstPercentage}%):
+                          </td>
+                          <td colSpan="2" style={styles.td}>
+                            ₹{(editedOrder.sgst || 0).toFixed(2)}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td colSpan="3" style={{ 
+                            ...styles.td, 
+                            textAlign: 'right',
+                            fontSize: '0.875rem'
+                          }}>
+                            CGST ({gstConfig.cgstPercentage}%):
+                          </td>
+                          <td colSpan="2" style={styles.td}>
+                            ₹{(editedOrder.cgst || 0).toFixed(2)}
+                          </td>
+                        </tr>
+                      </>
+                    )}
+                    <tr style={{ backgroundColor: 'var(--primary-light, #e3f2fd)' }}>
+                      <td colSpan="3" style={{ 
+                        ...styles.td, 
+                        textAlign: 'right', 
                         fontWeight: 'bold',
                         fontSize: '1rem'
                       }}>
@@ -858,12 +912,26 @@ const EditOrder = () => {
                         fontSize: '1.125rem',
                         color: 'var(--primary)'
                       }}>
-                        ₹{editedOrder.totalCost || 0}
+                        ₹{(editedOrder.grandTotal || 0).toFixed(2)}
                       </td>
                     </tr>
                   </tfoot>
                 </table>
               </div>
+
+              {!gstConfig.enabled && (
+                <div style={{
+                  marginTop: '0.75rem',
+                  padding: '0.5rem 0.75rem',
+                  backgroundColor: '#fff3cd',
+                  borderRadius: '0.25rem',
+                  fontSize: '0.75rem',
+                  color: '#856404',
+                  border: '1px solid #ffeeba'
+                }}>
+                  ℹ️ GST is currently disabled. Orders will be saved without GST.
+                </div>
+              )}
             </div>
 
             <div style={styles.modalFooter}>

@@ -10,37 +10,29 @@ const Billing = () => {
     billDate: new Date().toISOString().split('T')[0],
     customerName: '',
     customerPhone: '',
-     pickupDate: '',
-  deliveryDate: '',
+    pickupDate: '',
+    deliveryDate: '',
+    gstEnabled: true,
+    sgstPercentage: 9,
+    cgstPercentage: 9,
+    sgst: 0,
+    cgst: 0,
+    totalCost: 0,
+    grandTotal: 0,
     items: [
       { id: 1, item: '', quantity: 1, price: 0, total: 0 }
     ]
   });
- const [billImage, setBillImage] = useState(null);
-const [companySettings, setCompanySettings] = useState({
-  businessName: '',
-  address: '',
-  gstin: '',
-  logoUrl: '',
-  phoneNumber: ''
-});
-useEffect(() => {
-  const fetchSettings = async () => {
-    try {
-      const docRef = doc(db, 'settings', 'company');
-      const docSnap = await getDoc(docRef);
-      
-      if (docSnap.exists()) {
-        setCompanySettings(docSnap.data());
-      }
-    } catch (error) {
-      console.error('Error fetching company settings:', error);
-    }
-  };
-
-  fetchSettings();
-}, []);
-
+  
+  const [billImage, setBillImage] = useState(null);
+  const [companySettings, setCompanySettings] = useState({
+    businessName: '',
+    address: '',
+    gstin: '',
+    logoUrl: '',
+    phoneNumber: ''
+  });
+  
   const [billPreview, setBillPreview] = useState(null);
   const [bookingIds, setBookingIds] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -48,16 +40,35 @@ useEffect(() => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [loading, setLoading] = useState(false);
   const [availableServices, setAvailableServices] = useState([]);
-const formatDate = (dateString) => {
-  if (!dateString) return '';
-  
-  const date = new Date(dateString);
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const year = date.getFullYear();
-  
-  return `${day}-${month}-${year}`;
-};
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const docRef = doc(db, 'settings', 'company');
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+          setCompanySettings(docSnap.data());
+        }
+      } catch (error) {
+        console.error('Error fetching company settings:', error);
+      }
+    };
+
+    fetchSettings();
+  }, []);
+
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    
+    const date = new Date(dateString);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    
+    return `${day}-${month}-${year}`;
+  };
+
   // Fetch all booking IDs on component mount
   useEffect(() => {
     const fetchBookingIds = async () => {
@@ -98,7 +109,7 @@ const formatDate = (dateString) => {
       
       if (docSnap.exists()) {
         const bookingData = docSnap.data();
-        console.log('bookingData',bookingData);
+        console.log('bookingData', bookingData);
         
         // Extract services from booking data and update availableServices
         if (bookingData.items) {
@@ -116,7 +127,7 @@ const formatDate = (dateString) => {
         
         if (bookingData.items) {
           Object.entries(bookingData.items).forEach(([itemType, itemData]) => {
-            if (itemData.quantity > 0) { // Only include items with quantity > 0
+            if (itemData.quantity > 0) {
               items.push({
                 id: items.length + 1,
                 item: `${itemType}-${itemData.price.toFixed(2)}`,
@@ -128,19 +139,25 @@ const formatDate = (dateString) => {
           });
         }
         
-setBillData({
-  orderId: bookingId,
-  pickupDate: bookingData.pickupDate || '',
-  deliveryDate: bookingData.deliveryDate || '',
-  billDate: new Date().toISOString().split('T')[0],
-  customerName: bookingData.customerName || '',
-  customerPhone: bookingData.phone || '',
-  items: items.length > 0 ? items : [
-    { id: 1, item: '', quantity: 1, price: 0, total: 0 }
-  ]
-});
+        setBillData({
+          orderId: bookingId,
+          pickupDate: bookingData.pickupDate || '',
+          deliveryDate: bookingData.deliveryDate || '',
+          billDate: new Date().toISOString().split('T')[0],
+          customerName: bookingData.customerName || '',
+          customerPhone: bookingData.phone || '',
+          gstEnabled: bookingData.gstEnabled !== false, // Default to true for old bookings
+          sgstPercentage: bookingData.sgstPercentage || 9,
+          cgstPercentage: bookingData.cgstPercentage || 9,
+          sgst: parseFloat(bookingData.sgst) || 0,
+          cgst: parseFloat(bookingData.cgst) || 0,
+          totalCost: parseFloat(bookingData.totalCost) || 0,
+          grandTotal: parseFloat(bookingData.grandTotal) || 0,
+          items: items.length > 0 ? items : [
+            { id: 1, item: '', quantity: 1, price: 0, total: 0 }
+          ]
+        });
 
-        
         setSearchTerm(bookingId);
         setShowDropdown(false);
       }
@@ -166,26 +183,27 @@ setBillData({
       orderId: e.target.value
     }));
   };
-const itemMapping = {
-  shirt: 'Shirt',
-  tshirt: 'T-Shirt',
-  pant: 'Pant',
-  starch: 'Starch Cloth',
-  saree: 'Saree',
-  blouse: 'Blouse',
-  panjabi: 'Panjabi Suit',
-  dhotar: 'Dhotar',
-  shalu: 'Shalu / Paithani',
-  coat: 'Coat / Blazer',
-  shervani: 'Shervani',
-  sweater: 'Sweater / Jerkin',
-  onepiece: 'One Piece Ghagara',
-  bedsheet: 'Bedsheet (Single/Double)',
-  blanket: 'Blanket / Rajai',
-  shoes: 'Shoes Washing',
-  helmet: 'Helmet Washing',
-  clothsPerKg: 'Cloths Per Kg'
-};
+
+  const itemMapping = {
+    shirt: 'Shirt',
+    tshirt: 'T-Shirt',
+    pant: 'Pant',
+    starch: 'Starch Cloth',
+    saree: 'Saree',
+    blouse: 'Blouse',
+    panjabi: 'Panjabi Suit',
+    dhotar: 'Dhotar',
+    shalu: 'Shalu / Paithani',
+    coat: 'Coat / Blazer',
+    shervani: 'Shervani',
+    sweater: 'Sweater / Jerkin',
+    onepiece: 'One Piece Ghagara',
+    bedsheet: 'Bedsheet (Single/Double)',
+    blanket: 'Blanket / Rajai',
+    shoes: 'Shoes Washing',
+    helmet: 'Helmet Washing',
+    clothsPerKg: 'Cloths Per Kg'
+  };
 
   const handleItemChange = (id, field, value) => {
     setBillData(prev => {
@@ -230,248 +248,255 @@ const itemMapping = {
       return sum;
     }, 0);
     
-    const total = subtotal;
+    let sgst = 0;
+    let cgst = 0;
+    let total = subtotal;
+
+    if (billData.gstEnabled) {
+      sgst = subtotal * (billData.sgstPercentage / 100);
+      cgst = subtotal * (billData.cgstPercentage / 100);
+      total = subtotal + sgst + cgst;
+    }
     
-    return { subtotal, total };
+    return { subtotal, sgst, cgst, total };
   };
 
-  const { subtotal, total } = calculateTotals();
+  const { subtotal, sgst, cgst, total } = calculateTotals();
 
-const generateBill = () => {
-  if (!billData.orderId || !billData.customerName || !billData.customerPhone) {
-    alert('Please fill in all required fields');
-    return;
-  }
-
-  if (subtotal === 0) {
-    alert('Please add at least one item to the bill');
-    return;
-  }
-
-const itemsRows = billData.items
-  .filter(item => item.item && item.total > 0)
-  .map((item, index) => {
-    const itemParts = item.item.split('-');
-    const itemId = itemParts[0]; // Get the item ID
-    const itemPrice = itemParts.length > 1 ? parseFloat(itemParts[1]) : 0;
-    const displayTotal = typeof item.total === 'number' ? item.total.toFixed(2) : '0.00';
-    
-    return (
-      <tr key={item.id} style={{borderBottom: '1px solid #e2e8f0'}}>
-        <td style={{padding: '0.5rem 0', textAlign: 'center'}}>{index + 1}</td>
-        <td style={{padding: '0.5rem 0', textAlign: 'left'}}>
-          {itemMapping[itemId] || itemId.charAt(0).toUpperCase() + itemId.slice(1)} {/* Use mapping */}
-        </td>
-        <td style={{padding: '0.5rem 0', textAlign: 'center'}}>{item.quantity}</td>
-        <td style={{padding: '0.5rem 0', textAlign: 'right'}}>&#8377; {itemPrice.toFixed(2)}</td>
-        <td style={{padding: '0.5rem 0', textAlign: 'right'}}>&#8377; {displayTotal}</td>
-      </tr>
-    );
-  });
-
-
-  setBillPreview(
-    <div id="bill-preview" style={{
-      backgroundColor: '#f9f9f9',
-      padding: '1.5rem',
-      fontSize: '0.875rem',
-      maxWidth: '100%',
-      margin: '0 auto',
-      border: '1px solid #e2e8f0',
-      borderRadius: '8px',
-      boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)'
-    }}>
-      
-
-<div style={{ textAlign: 'center', marginBottom: '1.4rem' }}>
-{companySettings.logoUrl && (
-  <div style={{ marginBottom: '0.2rem' }}>
-    <img 
-      src={companySettings.logoUrl} 
-      alt="Logo" 
-      style={{ maxWidth: '70px', maxHeight: '70px' }}
-    />
-  </div>
-)}
-
-  <h2 style={{
-    fontSize: '1.5rem',
-    fontWeight: 'bold',
-    color: '#3B82F6',
-    marginBottom: '0.3rem'
-  }}>{companySettings.businessName || 'Wash & Joy'}</h2>
-  <p style={{ color: '#6B7280', marginBottom: '0.20rem' }}>Laundry & Dry Cleaning Service</p>
-  <p style={{ color: '#6B7280', marginBottom: '0.20rem', lineHeight: '1.2' }}>
-    {companySettings.address || 'Soma Niwas, Ramnagar Bus Stop, Rahatani Main Road, Rahatani Gav, Pune - 411017'}
-  </p>
-  {companySettings.gstin && (
-    <p style={{ color: '#6B7280', marginBottom: '0.20rem' }}>GSTIN: {companySettings.gstin}</p>
-  )}
-  <p style={{ color: '#6B7280', margin: 0 }}>
-    ☎ {companySettings.phoneNumber || '+91 8421586414'}
-  </p>
-</div>
-      
-      {/* Customer Details */}
-      <div style={{
-        borderTop: '2px solid #3B82F6',
-        borderBottom: '2px solid #3B82F6',
-        padding: '1rem 0',
-        marginBottom: '1rem'
-      }}>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: '1rem'
-        }}>
-          <div>
-          
-            <p style={{ fontWeight: '600', marginBottom: '0.5rem' }}>Customer Name:</p>
-            <p>{billData.customerName}</p>
-            <p>Pickup Date: {formatDate(billData.pickupDate)}</p>
-            <p>Delivery Date: {formatDate(billData.deliveryDate)}</p>
-            <p>Phone: {billData.customerPhone}</p>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <p><span style={{ fontWeight: '600' }}>Booking ID:</span> {billData.orderId}</p>
-            <p><span style={{ fontWeight: '600' }}>Date:</span> {formatDate(billData.billDate)}</p>
-          </div>
-        </div>
-      </div>
-      
-      {/* Items Table */}
-      <table style={{ width: '100%', marginBottom: '1rem', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr style={{ borderBottom: '2px solid #3B82F6' }}>
-            <th style={{ padding: '0.5rem 0', textAlign: 'center' }}>Sr. No</th>
-            <th style={{ padding: '0.5rem 0', textAlign: 'left' }}>Item</th>
-            <th style={{ padding: '0.5rem 0', textAlign: 'center' }}>Qty</th>
-            <th style={{ padding: '0.5rem 0', textAlign: 'right' }}>Rate</th>
-            <th style={{ padding: '0.5rem 0', textAlign: 'right' }}>Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {itemsRows}
-        </tbody>
-      </table>
-      
-      {/* Totals */}
-      <div style={{ borderTop: '2px solid #3B82F6', paddingTop: '1rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-          <span style={{ color: '#6B7280' }}>Amount:</span>
-          <span style={{ fontWeight: '500' }}>&#8377; {subtotal.toFixed(2)}</span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-          <span style={{ color: '#6B7280' }}>CGST(9%):</span>
-          <span style={{ fontWeight: '500' }}>&#8377; {(subtotal * 0.09).toFixed(2)}</span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-          <span style={{ color: '#6B7280' }}>SGST(9%):</span>
-          <span style={{ fontWeight: '500' }}>&#8377; {(subtotal * 0.09).toFixed(2)}</span>
-        </div>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          fontSize: '1.125rem',
-          fontWeight: 'bold',
-          borderTop: '1px solid #e2e8f0',
-          paddingTop: '0.5rem'
-        }}>
-          <span>Total:</span>
-          <span style={{ color: '#3B82F6' }}>&#8377; {(subtotal + subtotal * 0.18).toFixed(2)}</span>
-        </div>
-      </div>
-      
-      {/* Footer */}
-      <div style={{
-        marginTop: '1.5rem',
-        textAlign: 'center',
-        color: '#6B7280',
-        fontSize: '0.75rem'
-      }}>
-        <p>Collect your clothes within one week. After that, we are not responsible for any loss.</p>
-        <p style={{ marginTop: '1rem' }}>Store Hours: Thursday Closed</p>
-        <p style={{ marginTop: '1rem', fontWeight: 'bold' }}>Wash & Joy</p>
-        <p style={{ marginTop: '1rem', borderTop: '1px solid #e2e8f0', paddingTop: '1rem' }}>Signature: __________________</p>
-      </div>
-    </div>
-  );
-
-  // Capture the bill preview as an image
-  setTimeout(() => {
-    html2canvas(document.getElementById('bill-preview')).then(canvas => {
-      const imgData = canvas.toDataURL('image/png');
-      setBillImage(imgData);
-    });
-  }, 0);
-};
-
-
-
-
-
-const sendWhatsAppMessage = () => {
-  const {
-    customerName,
-    customerPhone,
-    orderId,
-    billDate,
-    pickupDate,
-    deliveryDate,
-    items
-  } = billData;
-
-  if (!customerPhone || !customerName || !orderId || items.length === 0) {
-    alert("Incomplete bill data");
-    return;
-  }
-
-  const { subtotal, total } = calculateTotals();
- // Add GST (example 18%)
-  const gstRate = 0.18;
-  const gstAmount = Math.round(subtotal * gstRate);
-  const grandTotal = subtotal + gstAmount;
-
-  let message = `🧾 *${companySettings.businessName } - Bill Summary*\n\n`;
-
-
-   message += `\n📍 ${companySettings.address || 'Wash & Joy, Rahatani'}\n`;
-  message += `☎ ${companySettings.phoneNumber || '-'}\n`;
-  if (companySettings.gstin) {
-    message += `GSTIN: ${companySettings.gstin}\n`;
-  }
-  
-  message += `👤 *Customer:* ${customerName}\n`;
-  message += `📞 *Phone:* ${customerPhone}\n`;
-  message += `🆔 *Booking ID:* ${orderId}\n`;
-  message += `📅 *Bill Date:* ${formatDate(billDate)}\n`;
-  if (pickupDate) message += `📥 *Pickup Date:* ${formatDate(pickupDate)}\n`;
-  if (deliveryDate) message += `📤 *Delivery Date:* ${formatDate(deliveryDate)}\n`;
-
-  message += `\n📦 *Items:*\n`;
-
-  items.forEach((item, index) => {
-    if (item.item && item.total > 0) {
-      const [itemName, itemRate] = item.item.split("-");
-      message += `${index + 1}. ${itemName.trim()} x${item.quantity} - ₹${item.total.toFixed(2)}\n`;
+  const generateBill = () => {
+    if (!billData.orderId || !billData.customerName || !billData.customerPhone) {
+      alert('Please fill in all required fields');
+      return;
     }
-  });
 
-  message += `\n💵 *Subtotal:* ₹${subtotal.toFixed(2)}\n`;
-  message += `💵 *GST (18%):* ₹${gstAmount.toFixed(2)}\n`;
-  message += `----------------------------- \n`;
-  message += `💰 *Total:* ₹${grandTotal.toFixed(2)}\n\n`;
+    if (subtotal === 0) {
+      alert('Please add at least one item to the bill');
+      return;
+    }
 
-  message += `📍 Wash & Joy,  Kharadi, Pune\n☎ 7758925760\n🕒 Thursday Closed\n\nThank you! 🙏`;
+    const itemsRows = billData.items
+      .filter(item => item.item && item.total > 0)
+      .map((item, index) => {
+        const itemParts = item.item.split('-');
+        const itemId = itemParts[0];
+        const itemPrice = itemParts.length > 1 ? parseFloat(itemParts[1]) : 0;
+        const displayTotal = typeof item.total === 'number' ? item.total.toFixed(2) : '0.00';
+        
+        return (
+          <tr key={item.id} style={{borderBottom: '1px solid #e2e8f0'}}>
+            <td style={{padding: '0.5rem 0', textAlign: 'center'}}>{index + 1}</td>
+            <td style={{padding: '0.5rem 0', textAlign: 'left'}}>
+              {itemMapping[itemId] || itemId.charAt(0).toUpperCase() + itemId.slice(1)}
+            </td>
+            <td style={{padding: '0.5rem 0', textAlign: 'center'}}>{item.quantity}</td>
+            <td style={{padding: '0.5rem 0', textAlign: 'right'}}>&#8377; {itemPrice.toFixed(2)}</td>
+            <td style={{padding: '0.5rem 0', textAlign: 'right'}}>&#8377; {displayTotal}</td>
+          </tr>
+        );
+      });
 
-  const encodedMessage = encodeURIComponent(message);
-  const whatsappLink = `https://wa.me/${customerPhone}?text=${encodedMessage}`;
+    setBillPreview(
+      <div id="bill-preview" style={{
+        backgroundColor: '#f9f9f9',
+        padding: '1.5rem',
+        fontSize: '0.875rem',
+        maxWidth: '100%',
+        margin: '0 auto',
+        border: '1px solid #e2e8f0',
+        borderRadius: '8px',
+        boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)'
+      }}>
+        <div style={{ textAlign: 'center', marginBottom: '1.4rem' }}>
+          {companySettings.logoUrl && (
+            <div style={{ marginBottom: '0.2rem' }}>
+              <img 
+                src={companySettings.logoUrl} 
+                alt="Logo" 
+                style={{ maxWidth: '70px', maxHeight: '70px' }}
+              />
+            </div>
+          )}
 
-  window.open(whatsappLink, '_blank');
-};
+          <h2 style={{
+            fontSize: '1.5rem',
+            fontWeight: 'bold',
+            color: '#3B82F6',
+            marginBottom: '0.3rem'
+          }}>{companySettings.businessName || 'Wash & Joy'}</h2>
+          <p style={{ color: '#6B7280', marginBottom: '0.20rem' }}>Laundry & Dry Cleaning Service</p>
+          <p style={{ color: '#6B7280', marginBottom: '0.20rem', lineHeight: '1.2' }}>
+            {companySettings.address || 'Soma Niwas, Ramnagar Bus Stop, Rahatani Main Road, Rahatani Gav, Pune - 411017'}
+          </p>
+          {companySettings.gstin && (
+            <p style={{ color: '#6B7280', marginBottom: '0.20rem' }}>GSTIN: {companySettings.gstin}</p>
+          )}
+          <p style={{ color: '#6B7280', margin: 0 }}>
+            ☎ {companySettings.phoneNumber || '+91 8421586414'}
+          </p>
+        </div>
+        
+        {/* Customer Details */}
+        <div style={{
+          borderTop: '2px solid #3B82F6',
+          borderBottom: '2px solid #3B82F6',
+          padding: '1rem 0',
+          marginBottom: '1rem'
+        }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '1rem'
+          }}>
+            <div>
+              <p style={{ fontWeight: '600', marginBottom: '0.5rem' }}>Customer Name:</p>
+              <p>{billData.customerName}</p>
+              <p>Pickup Date: {formatDate(billData.pickupDate)}</p>
+              <p>Delivery Date: {formatDate(billData.deliveryDate)}</p>
+              <p>Phone: {billData.customerPhone}</p>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <p><span style={{ fontWeight: '600' }}>Booking ID:</span> {billData.orderId}</p>
+              <p><span style={{ fontWeight: '600' }}>Date:</span> {formatDate(billData.billDate)}</p>
+            </div>
+          </div>
+        </div>
+        
+        {/* Items Table */}
+        <table style={{ width: '100%', marginBottom: '1rem', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ borderBottom: '2px solid #3B82F6' }}>
+              <th style={{ padding: '0.5rem 0', textAlign: 'center' }}>Sr. No</th>
+              <th style={{ padding: '0.5rem 0', textAlign: 'left' }}>Item</th>
+              <th style={{ padding: '0.5rem 0', textAlign: 'center' }}>Qty</th>
+              <th style={{ padding: '0.5rem 0', textAlign: 'right' }}>Rate</th>
+              <th style={{ padding: '0.5rem 0', textAlign: 'right' }}>Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {itemsRows}
+          </tbody>
+        </table>
+        
+        {/* Totals */}
+        <div style={{ borderTop: '2px solid #3B82F6', paddingTop: '1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+            <span style={{ color: '#6B7280' }}>Amount:</span>
+            <span style={{ fontWeight: '500' }}>&#8377; {subtotal.toFixed(2)}</span>
+          </div>
+          
+          {billData.gstEnabled && (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                <span style={{ color: '#6B7280' }}>CGST({billData.cgstPercentage}%):</span>
+                <span style={{ fontWeight: '500' }}>&#8377; {cgst.toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                <span style={{ color: '#6B7280' }}>SGST({billData.sgstPercentage}%):</span>
+                <span style={{ fontWeight: '500' }}>&#8377; {sgst.toFixed(2)}</span>
+              </div>
+            </>
+          )}
+          
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            fontSize: '1.125rem',
+            fontWeight: 'bold',
+            borderTop: '1px solid #e2e8f0',
+            paddingTop: '0.5rem'
+          }}>
+            <span>Total:</span>
+            <span style={{ color: '#3B82F6' }}>&#8377; {total.toFixed(2)}</span>
+          </div>
+        </div>
+        
+        {/* Footer */}
+        <div style={{
+          marginTop: '1.5rem',
+          textAlign: 'center',
+          color: '#6B7280',
+          fontSize: '0.75rem'
+        }}>
+          <p>Collect your clothes within one week. After that, we are not responsible for any loss.</p>
+          <p style={{ marginTop: '1rem' }}>Store Hours: Thursday Closed</p>
+          <p style={{ marginTop: '1rem', fontWeight: 'bold' }}>Wash & Joy</p>
+          <p style={{ marginTop: '1rem', borderTop: '1px solid #e2e8f0', paddingTop: '1rem' }}>Signature: __________________</p>
+        </div>
+      </div>
+    );
 
+    // Capture the bill preview as an image
+    setTimeout(() => {
+      html2canvas(document.getElementById('bill-preview')).then(canvas => {
+        const imgData = canvas.toDataURL('image/png');
+        setBillImage(imgData);
+      });
+    }, 0);
+  };
 
+  const sendWhatsAppMessage = () => {
+    const {
+      customerName,
+      customerPhone,
+      orderId,
+      billDate,
+      pickupDate,
+      deliveryDate,
+      items,
+      gstEnabled
+    } = billData;
 
+    if (!customerPhone || !customerName || !orderId || items.length === 0) {
+      alert("Incomplete bill data");
+      return;
+    }
+
+    const { subtotal, sgst, cgst, total } = calculateTotals();
+
+    let message = `🧾 *${companySettings.businessName} - Bill Summary*\n\n`;
+
+    message += `\n📍 ${companySettings.address || 'Wash & Joy, Rahatani'}\n`;
+    message += `☎ ${companySettings.phoneNumber || '-'}\n`;
+    if (companySettings.gstin) {
+      message += `GSTIN: ${companySettings.gstin}\n`;
+    }
+    
+    message += `👤 *Customer:* ${customerName}\n`;
+    message += `📞 *Phone:* ${customerPhone}\n`;
+    message += `🆔 *Booking ID:* ${orderId}\n`;
+    message += `📅 *Bill Date:* ${formatDate(billDate)}\n`;
+    if (pickupDate) message += `📥 *Pickup Date:* ${formatDate(pickupDate)}\n`;
+    if (deliveryDate) message += `📤 *Delivery Date:* ${formatDate(deliveryDate)}\n`;
+
+    message += `\n📦 *Items:*\n`;
+
+    items.forEach((item, index) => {
+      if (item.item && item.total > 0) {
+        const [itemName, itemRate] = item.item.split("-");
+        const displayName = itemMapping[itemName.trim()] || itemName.trim();
+        message += `${index + 1}. ${displayName} x${item.quantity} - ₹${item.total.toFixed(2)}\n`;
+      }
+    });
+
+    message += `\n💵 *Subtotal:* ₹${subtotal.toFixed(2)}\n`;
+    
+    if (gstEnabled) {
+      message += `💵 *CGST (${billData.cgstPercentage}%):* ₹${cgst.toFixed(2)}\n`;
+      message += `💵 *SGST (${billData.sgstPercentage}%):* ₹${sgst.toFixed(2)}\n`;
+    }
+    
+    message += `----------------------------- \n`;
+    message += `💰 *Total:* ₹${total.toFixed(2)}\n\n`;
+
+    message += `📍 ${companySettings.businessName || 'Wash & Joy'}, Pune\n`;
+    message += `☎ ${companySettings.phoneNumber || '7758925760'}\n`;
+    message += `🕒 Thursday Closed\n\nThank you! 🙏`;
+
+    const encodedMessage = encodeURIComponent(message);
+    const whatsappLink = `https://wa.me/${customerPhone}?text=${encodedMessage}`;
+
+    window.open(whatsappLink, '_blank');
+  };
 
   const printBill = () => {
     if (!billPreview) return;
@@ -722,9 +747,7 @@ const sendWhatsAppMessage = () => {
               </div>
             </div>
 
-
-
- <div style={{
+            <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
               gap: '2.8rem'
@@ -780,9 +803,6 @@ const sendWhatsAppMessage = () => {
                 />
               </div>
             </div>
-
-
-
 
             <div style={{
               display: 'grid',
@@ -942,6 +962,35 @@ const sendWhatsAppMessage = () => {
                   <span style={{ color: 'var(--gray-600)' }}>Subtotal:</span>
                   <span style={{ fontWeight: '500' }}>&#8377; {subtotal.toFixed(2)}</span>
                 </div>
+                
+                {billData.gstEnabled ? (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--gray-600)', fontSize: '0.875rem' }}>
+                        CGST ({billData.cgstPercentage}%):
+                      </span>
+                      <span style={{ fontWeight: '500', fontSize: '0.875rem' }}>&#8377; {cgst.toFixed(2)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--gray-600)', fontSize: '0.875rem' }}>
+                        SGST ({billData.sgstPercentage}%):
+                      </span>
+                      <span style={{ fontWeight: '500', fontSize: '0.875rem' }}>&#8377; {sgst.toFixed(2)}</span>
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ 
+                    padding: '0.5rem', 
+                    backgroundColor: '#fff3cd', 
+                    borderRadius: '0.25rem',
+                    fontSize: '0.75rem',
+                    color: '#856404',
+                    textAlign: 'center'
+                  }}>
+                    GST Not Applicable for this order
+                  </div>
+                )}
+                
                 <div style={{
                   display: 'flex',
                   justifyContent: 'space-between',
@@ -991,21 +1040,21 @@ const sendWhatsAppMessage = () => {
                 Print Bill
               </button>
               <button
-              type="button"
-              onClick={sendWhatsAppMessage}
-              disabled={!billImage}
-              style={{
-                padding: '0.75rem 1.5rem',
-                backgroundColor: billImage ? 'var(--green-600)' : 'var(--gray-300)',
-                color: 'white',
-                borderRadius: '0.5rem',
-                border: 'none',
-                cursor: billImage ? 'pointer' : 'not-allowed',
-                fontSize: '0.875rem'
-              }}
-            >
-              Send via WhatsApp
-            </button>
+                type="button"
+                onClick={sendWhatsAppMessage}
+                disabled={!billImage}
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  backgroundColor: billImage ? 'var(--green-600)' : 'var(--gray-300)',
+                  color: 'white',
+                  borderRadius: '0.5rem',
+                  border: 'none',
+                  cursor: billImage ? 'pointer' : 'not-allowed',
+                  fontSize: '0.875rem'
+                }}
+              >
+                Send via WhatsApp
+              </button>
             </div>
           </form>
         </div>

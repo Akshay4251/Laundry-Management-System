@@ -14,6 +14,12 @@ const Settings = () => {
     logoUrl: '',
   });
 
+  const [gstConfig, setGstConfig] = useState({
+    enabled: true,
+    sgstPercentage: 9,
+    cgstPercentage: 9
+  });
+
   const [serviceConfig, setServiceConfig] = useState({
     serviceTypes: [],
     prices: {}
@@ -42,6 +48,21 @@ const Settings = () => {
         const businessSnap = await getDoc(doc(db, ...SETTINGS_DOC_PATH));
         if (businessSnap.exists()) {
           setSettings(prev => ({ ...prev, ...businessSnap.data() }));
+        }
+
+        // Load GST configuration
+        const gstSnap = await getDoc(doc(db, 'settings', 'gstConfig'));
+        if (gstSnap.exists()) {
+          setGstConfig(gstSnap.data());
+        } else {
+          // Set default GST config
+          const defaultGstConfig = {
+            enabled: true,
+            sgstPercentage: 9,
+            cgstPercentage: 9
+          };
+          await setDoc(doc(db, 'settings', 'gstConfig'), defaultGstConfig);
+          setGstConfig(defaultGstConfig);
         }
 
         // Load existing orders count
@@ -102,6 +123,31 @@ const Settings = () => {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setSettings(prev => ({ ...prev, [name]: value }));
+  };
+
+  // GST Configuration handlers
+  const handleGstToggle = () => {
+    setGstConfig(prev => ({ ...prev, enabled: !prev.enabled }));
+  };
+
+  const handleGstPercentageChange = (field, value) => {
+    const numValue = parseFloat(value);
+    if (numValue >= 0 && numValue <= 100) {
+      setGstConfig(prev => ({ ...prev, [field]: numValue }));
+    }
+  };
+
+  const saveGstConfig = async () => {
+    setSaving(true);
+    try {
+      await setDoc(doc(db, 'settings', 'gstConfig'), gstConfig);
+      setMessage({ type: 'success', text: 'GST configuration saved successfully!' });
+    } catch (error) {
+      console.error('Error saving GST config:', error);
+      setMessage({ type: 'error', text: 'Failed to save GST configuration.' });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleLogoChange = async (e) => {
@@ -173,7 +219,7 @@ const Settings = () => {
     }
   };
 
-  // Order ID Reset Function - Enhanced to delete all orders
+  // Order ID Reset Function
   const deleteAllOrders = async () => {
     try {
       const bookingsSnapshot = await getDocs(collection(db, 'Bookings'));
@@ -715,6 +761,182 @@ const Settings = () => {
                     }}
                   >
                     Remove
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* GST Configuration Section */}
+            <div style={{
+              padding: '1.5rem',
+              backgroundColor: '#f0f9ff',
+              border: '2px solid #3b82f6',
+              borderRadius: '0.5rem'
+            }}>
+              <h4 style={{ 
+                fontSize: '1.125rem', 
+                fontWeight: 500, 
+                color: '#1e40af', 
+                marginBottom: '1rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}>
+                <span>💰</span> GST Configuration
+              </h4>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                {/* GST Enable/Disable Toggle */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '1rem',
+                  padding: '1rem',
+                  backgroundColor: gstConfig.enabled ? '#dcfce7' : '#fee2e2',
+                  border: gstConfig.enabled ? '1px solid #16a34a' : '1px solid #dc2626',
+                  borderRadius: '0.5rem',
+                  transition: 'all 0.3s ease'
+                }}>
+                  <input
+                    type="checkbox"
+                    id="gstEnabled"
+                    checked={gstConfig.enabled}
+                    onChange={handleGstToggle}
+                    style={{
+                      width: '20px',
+                      height: '20px',
+                      cursor: 'pointer',
+                      accentColor: '#3b82f6'
+                    }}
+                  />
+                  <label
+                    htmlFor="gstEnabled"
+                    style={{
+                      fontSize: '0.95rem',
+                      fontWeight: '500',
+                      color: gstConfig.enabled ? '#166534' : '#991b1b',
+                      cursor: 'pointer',
+                      flex: 1
+                    }}
+                  >
+                    {gstConfig.enabled ? '✓ GST Enabled' : '✗ GST Disabled'}
+                  </label>
+                  <span style={{
+                    fontSize: '0.75rem',
+                    padding: '0.25rem 0.75rem',
+                    backgroundColor: 'white',
+                    borderRadius: '9999px',
+                    color: gstConfig.enabled ? '#166534' : '#991b1b',
+                    fontWeight: '600'
+                  }}>
+                    {gstConfig.enabled ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+
+                {/* GST Percentage Inputs */}
+                {gstConfig.enabled && (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                    gap: '1.5rem',
+                    padding: '1rem',
+                    backgroundColor: 'white',
+                    borderRadius: '0.5rem',
+                    border: '1px solid #bfdbfe'
+                  }}>
+                    <div>
+                      <label style={{
+                        display: 'block',
+                        fontSize: '0.875rem',
+                        fontWeight: '500',
+                        color: '#1e40af',
+                        marginBottom: '0.5rem'
+                      }}>
+                        SGST Percentage (%)
+                      </label>
+                      <input
+                        type="number"
+                        value={gstConfig.sgstPercentage}
+                        onChange={(e) => handleGstPercentageChange('sgstPercentage', e.target.value)}
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        style={{
+                          width: '100%',
+                          padding: '0.5rem 1rem',
+                          border: '1px solid #93c5fd',
+                          borderRadius: '0.5rem',
+                          outline: 'none',
+                          fontSize: '0.875rem'
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{
+                        display: 'block',
+                        fontSize: '0.875rem',
+                        fontWeight: '500',
+                        color: '#1e40af',
+                        marginBottom: '0.5rem'
+                      }}>
+                        CGST Percentage (%)
+                      </label>
+                      <input
+                        type="number"
+                        value={gstConfig.cgstPercentage}
+                        onChange={(e) => handleGstPercentageChange('cgstPercentage', e.target.value)}
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        style={{
+                          width: '100%',
+                          padding: '0.5rem 1rem',
+                          border: '1px solid #93c5fd',
+                          borderRadius: '0.5rem',
+                          outline: 'none',
+                          fontSize: '0.875rem'
+                        }}
+                      />
+                    </div>
+
+                    <div style={{
+                      gridColumn: '1 / -1',
+                      padding: '0.75rem',
+                      backgroundColor: '#eff6ff',
+                      borderRadius: '0.375rem',
+                      border: '1px solid #bfdbfe'
+                    }}>
+                      <p style={{
+                        fontSize: '0.875rem',
+                        color: '#1e40af',
+                        margin: 0,
+                        fontWeight: '500'
+                      }}>
+                        Total GST: {(gstConfig.sgstPercentage + gstConfig.cgstPercentage).toFixed(2)}%
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Save GST Config Button */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    onClick={saveGstConfig}
+                    disabled={saving}
+                    style={{
+                      padding: '0.5rem 1.5rem',
+                      backgroundColor: saving ? '#93c5fd' : '#3b82f6',
+                      color: 'white',
+                      borderRadius: '0.5rem',
+                      border: 'none',
+                      cursor: saving ? 'wait' : 'pointer',
+                      fontSize: '0.875rem',
+                      fontWeight: '500'
+                    }}
+                  >
+                    {saving ? 'Saving...' : 'Save GST Configuration'}
                   </button>
                 </div>
               </div>

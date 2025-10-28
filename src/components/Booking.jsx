@@ -27,8 +27,7 @@ const Booking = () => {
     bedsheet: sbed, blanket: dbed, shoes, helmet, clothsPerKg: clothsperkg
   };
 
-  // Add a default placeholder image for when no icon is available
-  const defaultIcon = shirt; // or create a specific placeholder image
+  const defaultIcon = shirt;
 
   const [formData, setFormData] = useState({
     customerName: '',
@@ -44,11 +43,22 @@ const Booking = () => {
   const [servicePrices, setServicePrices] = useState({});
   const [clothingItems, setClothingItems] = useState([]);
   const [availableServices, setAvailableServices] = useState([]);
+  const [gstConfig, setGstConfig] = useState({
+    enabled: true,
+    sgstPercentage: 9,
+    cgstPercentage: 9
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchConfiguration = async () => {
       try {
+        // Load GST Configuration
+        const gstDoc = await getDoc(doc(db, "settings", "gstConfig"));
+        if (gstDoc.exists()) {
+          setGstConfig(gstDoc.data());
+        }
+
         const serviceDoc = await getDoc(doc(db, "settings", "serviceConfig"));
         let services = {};
         let serviceList = [];
@@ -157,24 +167,19 @@ const Booking = () => {
     fetchConfiguration();
   }, []);
 
-  // Helper function to get the appropriate icon for a cloth item
   const getClothIcon = (item) => {
-    // Priority 1: Use custom uploaded icon URL if available
     if (item.iconUrl && item.iconUrl.trim() !== '') {
       return item.iconUrl;
     }
     
-    // Priority 2: Use icon from imageMap based on icon field
     if (item.icon && imageMap[item.icon]) {
       return imageMap[item.icon];
     }
     
-    // Priority 3: Use icon from imageMap based on id field
     if (imageMap[item.id]) {
       return imageMap[item.id];
     }
     
-    // Priority 4: Use default icon
     return defaultIcon;
   };
 
@@ -248,9 +253,15 @@ const Booking = () => {
       totalCost += item.quantity * item.price;
     });
 
-    const sgst = totalCost * 0.09;
-    const cgst = totalCost * 0.09;
-    const grandTotal = totalCost + sgst + cgst;
+    let sgst = 0;
+    let cgst = 0;
+    let grandTotal = totalCost;
+
+    if (gstConfig.enabled) {
+      sgst = totalCost * (gstConfig.sgstPercentage / 100);
+      cgst = totalCost * (gstConfig.cgstPercentage / 100);
+      grandTotal = totalCost + sgst + cgst;
+    }
 
     return { totalItems, totalCost, sgst, cgst, grandTotal };
   };
@@ -314,7 +325,19 @@ const Booking = () => {
         createdAt: new Date()
       }, { merge: true });
 
-      // Save booking with status field
+      const itemsTotal = Object.values(selectedItems).reduce((sum, item) => sum + item.quantity * item.price, 0);
+      
+      let calculatedSgst = 0;
+      let calculatedCgst = 0;
+      let calculatedGrandTotal = itemsTotal;
+
+      if (gstConfig.enabled) {
+        calculatedSgst = itemsTotal * (gstConfig.sgstPercentage / 100);
+        calculatedCgst = itemsTotal * (gstConfig.cgstPercentage / 100);
+        calculatedGrandTotal = itemsTotal + calculatedSgst + calculatedCgst;
+      }
+
+      // Save booking with GST configuration
       await setDoc(doc(db, "Bookings", bookingId), {
         customerName: formData.customerName,
         phone: formData.phone,
@@ -325,13 +348,14 @@ const Booking = () => {
         instructions: formData.instructions,
         items: selectedItems,
         totalItems: Object.values(selectedItems).reduce((sum, item) => sum + item.quantity, 0),
-        totalCost: Object.values(selectedItems).reduce((sum, item) => sum + item.quantity * item.price, 0),
-        sgst: (Object.values(selectedItems).reduce((sum, item) => sum + item.quantity * item.price, 0) * 0.09).toFixed(2),
-        cgst: (Object.values(selectedItems).reduce((sum, item) => sum + item.quantity * item.price, 0) * 0.09).toFixed(2),
-        grandTotal: (
-          Object.values(selectedItems).reduce((sum, item) => sum + item.quantity * item.price, 0) * 1.18
-        ).toFixed(2),
-        status: 'pending', // ✅ ADDED STATUS FIELD
+        totalCost: itemsTotal,
+        gstEnabled: gstConfig.enabled,
+        sgstPercentage: gstConfig.enabled ? gstConfig.sgstPercentage : 0,
+        cgstPercentage: gstConfig.enabled ? gstConfig.cgstPercentage : 0,
+        sgst: calculatedSgst.toFixed(2),
+        cgst: calculatedCgst.toFixed(2),
+        grandTotal: calculatedGrandTotal.toFixed(2),
+        status: 'pending',
         createdAt: new Date()
       });
 
@@ -483,7 +507,6 @@ const Booking = () => {
             </select>
           </div>
 
-          {/* URGENT DELIVERY CHECKBOX */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -679,20 +702,45 @@ const Booking = () => {
                 </span>
               </div>
 
-              <div style={{ marginTop: '0.5rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                  <span>SGST (9%):</span>
-                  <span>&#8377; {sgst.toFixed(2)}</span>
+              {gstConfig.enabled && (
+                <div style={{ marginTop: '0.5rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                    <span>SGST ({gstConfig.sgstPercentage}%):</span>
+                    <span>&#8377; {sgst.toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                    <span>CGST ({gstConfig.cgstPercentage}%):</span>
+                    <span>&#8377; {cgst.toFixed(2)}</span>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                  <span>CGST (9%):</span>
-                  <span>&#8377; {cgst.toFixed(2)}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '1.125rem', color: 'var(--primary)' }}>
-                  <span>Grand Total:</span>
-                  <span>&#8377; {grandTotal.toFixed(2)}</span>
-                </div>
+              )}
+
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                fontWeight: 'bold', 
+                fontSize: '1.125rem', 
+                color: 'var(--primary)',
+                marginTop: '0.5rem',
+                paddingTop: '0.5rem',
+                borderTop: '1px solid var(--gray-200)'
+              }}>
+                <span>Grand Total:</span>
+                <span>&#8377; {grandTotal.toFixed(2)}</span>
               </div>
+
+              {!gstConfig.enabled && (
+                <div style={{
+                  marginTop: '0.5rem',
+                  padding: '0.5rem',
+                  backgroundColor: '#fff3cd',
+                  borderRadius: '0.25rem',
+                  fontSize: '0.75rem',
+                  color: '#856404'
+                }}>
+                  Note: GST is currently disabled
+                </div>
+              )}
             </div>
           </div>
           

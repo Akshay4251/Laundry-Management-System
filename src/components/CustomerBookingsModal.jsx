@@ -111,7 +111,8 @@ const CustomerBookingsModal = ({ phone, onClose }) => {
                 <th>Items</th>
                 <th>Total Items</th>
                 <th>Subtotal</th>
-                <th>GST (18%)</th>
+                <th>SGST</th>
+                <th>CGST</th>
                 <th>Grand Total</th>
                 <th>Status</th>
                 <th>Instructions</th>
@@ -121,10 +122,13 @@ const CustomerBookingsModal = ({ phone, onClose }) => {
             <tbody>
               {bookings.length > 0 ? (
                 bookings.map(booking => {
-                  const subtotal = booking.totalCost || 0;
-                  const gstRate = 0.18;
-                  const gstAmount = Math.round(subtotal * gstRate);
-                  const grandTotal = subtotal + gstAmount;
+                  const subtotal = parseFloat(booking.totalCost) || 0;
+                  const sgst = parseFloat(booking.sgst) || 0;
+                  const cgst = parseFloat(booking.cgst) || 0;
+                  const grandTotal = parseFloat(booking.grandTotal) || subtotal;
+                  const gstEnabled = booking.gstEnabled !== false; // Default to true for old bookings
+                  const sgstPercent = booking.sgstPercentage || 0;
+                  const cgstPercent = booking.cgstPercentage || 0;
 
                   return (
                     <tr key={booking.id}>
@@ -148,27 +152,44 @@ const CustomerBookingsModal = ({ phone, onClose }) => {
                         )}
                       </td>
                       <td>{booking.totalItems}</td>
-                      <td>₹{subtotal}</td>
-                      <td>₹{gstAmount}</td>
-                      <td><b>₹{grandTotal}</b></td>
+                      <td>₹{subtotal.toFixed(2)}</td>
+                      <td>
+                        {gstEnabled ? (
+                          <>₹{sgst.toFixed(2)}<br/><small>({sgstPercent}%)</small></>
+                        ) : (
+                          <span style={{ color: '#999', fontSize: '0.85em' }}>N/A</span>
+                        )}
+                      </td>
+                      <td>
+                        {gstEnabled ? (
+                          <>₹{cgst.toFixed(2)}<br/><small>({cgstPercent}%)</small></>
+                        ) : (
+                          <span style={{ color: '#999', fontSize: '0.85em' }}>N/A</span>
+                        )}
+                      </td>
+                      <td><b>₹{grandTotal.toFixed(2)}</b></td>
                       <td>
                         <span
                           style={{
                             padding: '4px 8px',
                             borderRadius: '5px',
                             backgroundColor:
-                              booking.status === 'Pending'
+                              booking.status === 'pending'
                                 ? '#ffc107'
                                 : booking.status === 'in-progress'
                                 ? '#17a2b8'
-                                : '#28a745',
+                                : booking.status === 'ready'
+                                ? '#28a745'
+                                : booking.status === 'completed'
+                                ? '#6c757d'
+                                : '#dc3545',
                             color: '#fff',
                           }}
                         >
                           {booking.status}
                         </span>
                       </td>
-                      <td>{booking.instructions}</td>
+                      <td>{booking.instructions || '-'}</td>
                       <td>
                         {booking.createdAt?.toDate
                           ? booking.createdAt.toDate().toLocaleString()
@@ -179,7 +200,7 @@ const CustomerBookingsModal = ({ phone, onClose }) => {
                 })
               ) : (
                 <tr>
-                  <td colSpan="14" style={{ textAlign: 'center' }}>
+                  <td colSpan="15" style={{ textAlign: 'center' }}>
                     No bookings found
                   </td>
                 </tr>
