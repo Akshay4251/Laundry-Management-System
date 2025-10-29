@@ -84,68 +84,81 @@ const Orders = ({ initialFilter = 'all' }) => {
   };
 
   const handleShare = (order) => {
-    if (!order.phone) {
-      alert("Customer phone number not available!");
-      return;
-    }
+  if (!order.phone) {
+    alert("Customer phone number not available!");
+    return;
+  }
 
-    const itemsList = Object.entries(order.items || {})
-      .map(([itemName, details]) => `  • ${itemMapping[itemName] || itemName} × ${details.quantity}`)
-      .join("\n");
+  const itemsList = Object.entries(order.items || {})
+    .map(([itemName, details], index) => `${index + 1}. ${itemMapping[itemName] || itemName} × ${details.quantity}`)
+    .join("\n");
 
-    const urgentBadge = order.urgentDelivery ? "🔥 *URGENT DELIVERY* 🔥" : "";
+  const urgentNotice = order.urgentDelivery 
+    ? "\n⚠️ *PRIORITY SERVICE ACTIVATED* ⚠️\nYour order is being processed urgently!\n" 
+    : "";
 
-    // Status emoji mapping
-    const statusEmojis = {
-      'pending': '⏳',
-      'in-progress': '🔄',
-      'ready': '✅',
-      'completed': '🎉',
-      'canceled': '❌'
-    };
+  // Dynamic company details
+  const companyName = companySettings.businessName || 'Wash & Joy';
+  const companyPhone = companySettings.phoneNumber || '';
+  const companyAddress = companySettings.address || '';
 
-    const statusEmoji = statusEmojis[order.status] || '📋';
-
-    // Dynamic company name
-    const companyName = companySettings.businessName || 'Wash & Joy';
-    const companyPhone = companySettings.phoneNumber || '';
-
-    const message = `━━━━━━━━━━━━━━━━━━━━
-💧 *${companyName.toUpperCase()}* 💧
-   _Your Laundry Partner_
-━━━━━━━━━━━━━━━━━━━━
+  const message = `
+┏━━━━━━━━━━━━━━━━━━━━┓
+┃   💧 ${companyName.toUpperCase()} 💧   ┃
+┃  Premium Laundry     ┃
+┗━━━━━━━━━━━━━━━━━━━━┛
 
 Hello *${order.customer}* 👋
+${urgentNotice}
+━━━━━━━━━━━━━━━━━━━━━━
 
-📌 *ORDER DETAILS*
-┏━━━━━━━━━━━━━━━━
-┃ Order ID: *${order.id}*
-┃ Service: *${order.service}*
-┃ Status: ${statusEmoji} *${order.status.toUpperCase()}*
-┗━━━━━━━━━━━━━━━━
-${urgentBadge ? `\n${urgentBadge}\n` : ''}
-🛍️ *ITEMS:*
+📌 *ORDER INFORMATION*
+
+🔖 Order ID: *#${order.id}*
+🏷️ Service Type: *${order.service}*
+📊 Current Status: *${order.status.toUpperCase()}*
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+🧺 *ITEMS IN YOUR ORDER*
+
 ${itemsList}
 
-📅 *SCHEDULE*
-   Pickup: ${order.pickupDate || 'Not set'}
-   Delivery: ${order.deliveryDate || 'Not set'}
+━━━━━━━━━━━━━━━━━━━━━━
 
-${order.instructions ? `📝 *Special Instructions:*\n   ${order.instructions}\n` : ''}
-💰 *GRAND TOTAL: ₹${order.amount}*
+📅 *SERVICE SCHEDULE*
 
-━━━━━━━━━━━━━━━━━━━━
-Thank you for choosing us! 🙏
-We take care of your clothes
-with love and care ❤️
+📥 Pickup Date: *${order.pickupDate || 'TBD'}*
+📦 Delivery Date: *${order.deliveryDate || 'TBD'}*
 
-${companyPhone ? `📞 Contact: ${companyPhone}\n` : ''}
-━━━━━━━━━━━━━━━━━━━━
-_${companyName} - Fresh & Clean!_ ✨`;
+${order.instructions ? `━━━━━━━━━━━━━━━━━━━━━━\n\n📝 *Special Instructions*\n${order.instructions}\n` : ''}
+━━━━━━━━━━━━━━━━━━━━━━
 
-    const whatsappUrl = `https://wa.me/${order.phone}?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, "_blank");
-  };
+💰 *BILL SUMMARY*
+Total Amount: *₹${order.amount}*
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+✅ *Why Choose Us?*
+• Professional Cleaning
+• Eco-Friendly Products
+• Timely Delivery
+• Affordable Pricing
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+Thank you for your business! 🙏
+
+${companyPhone ? `📞 Contact: ${companyPhone}\n` : ''}${companyAddress ? `📍 Address: ${companyAddress}\n` : ''}
+━━━━━━━━━━━━━━━━━━━━━━
+
+*${companyName}*
+_Making Laundry Easy_ ✨
+`;
+
+  const whatsappUrl = `https://wa.me/${order.phone}?text=${encodeURIComponent(message)}`;
+  window.open(whatsappUrl, "_blank");
+};
 
   const handleStatusChange = async (docId, newStatus) => {
     try {
