@@ -1,17 +1,41 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, onSnapshot, updateDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, updateDoc, doc, getDoc, Timestamp } from 'firebase/firestore';
 
 const Orders = ({ initialFilter = 'all' }) => {
   const [orders, setOrders] = useState([]);
   const [filterStatus, setFilterStatus] = useState(initialFilter);
-  
   const [pickupDateFilter, setPickupDateFilter] = useState('');
   const [deliveryDateFilter, setDeliveryDateFilter] = useState('');
+  
+  // Company settings state
+  const [companySettings, setCompanySettings] = useState({
+    businessName: 'Wash & Joy',
+    logoUrl: '',
+    phoneNumber: '',
+    address: '',
+    gstin: ''
+  });
 
   useEffect(() => {
     setFilterStatus(initialFilter);
   }, [initialFilter]);
+
+  // Fetch company settings
+  useEffect(() => {
+    const fetchCompanySettings = async () => {
+      try {
+        const companyDoc = await getDoc(doc(db, 'settings', 'company'));
+        if (companyDoc.exists()) {
+          setCompanySettings(prev => ({ ...prev, ...companyDoc.data() }));
+        }
+      } catch (error) {
+        console.error('Error fetching company settings:', error);
+      }
+    };
+
+    fetchCompanySettings();
+  }, []);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'Bookings'), (snapshot) => {
@@ -66,25 +90,58 @@ const Orders = ({ initialFilter = 'all' }) => {
     }
 
     const itemsList = Object.entries(order.items || {})
-      .map(([itemName, details]) => `${details.quantity} ${itemMapping[itemName] || itemName}`)
-      .join(", ");
+      .map(([itemName, details]) => `  • ${itemMapping[itemName] || itemName} × ${details.quantity}`)
+      .join("\n");
 
-    const urgentText = order.urgentDelivery ? "\n*URGENT DELIVERY*" : "";
+    const urgentBadge = order.urgentDelivery ? "🔥 *URGENT DELIVERY* 🔥" : "";
 
-    const message = `Hello 🙏 ${order.customer}, 
-Your order (${order.id}) for *${order.service}* is currently *${order.status.toUpperCase()}*.${urgentText}
+    // Status emoji mapping
+    const statusEmojis = {
+      'pending': '⏳',
+      'in-progress': '🔄',
+      'ready': '✅',
+      'completed': '🎉',
+      'canceled': '❌'
+    };
 
-Items: ${itemsList}
-*Grand Total: ₹${order.amount}*
+    const statusEmoji = statusEmojis[order.status] || '📋';
 
-Pickup Date: ${order.pickupDate}
-Delivery Date: ${order.deliveryDate}
+    // Dynamic company name
+    const companyName = companySettings.businessName || 'Wash & Joy';
+    const companyPhone = companySettings.phoneNumber || '';
 
-Instructions: ${order.instructions || "No Instructions Given"}
+    const message = `━━━━━━━━━━━━━━━━━━━━
+💧 *${companyName.toUpperCase()}* 💧
+   _Your Laundry Partner_
+━━━━━━━━━━━━━━━━━━━━
 
-Thank you for choosing us!
-- Wash & Joy
-  `;
+Hello *${order.customer}* 👋
+
+📌 *ORDER DETAILS*
+┏━━━━━━━━━━━━━━━━
+┃ Order ID: *${order.id}*
+┃ Service: *${order.service}*
+┃ Status: ${statusEmoji} *${order.status.toUpperCase()}*
+┗━━━━━━━━━━━━━━━━
+${urgentBadge ? `\n${urgentBadge}\n` : ''}
+🛍️ *ITEMS:*
+${itemsList}
+
+📅 *SCHEDULE*
+   Pickup: ${order.pickupDate || 'Not set'}
+   Delivery: ${order.deliveryDate || 'Not set'}
+
+${order.instructions ? `📝 *Special Instructions:*\n   ${order.instructions}\n` : ''}
+💰 *GRAND TOTAL: ₹${order.amount}*
+
+━━━━━━━━━━━━━━━━━━━━
+Thank you for choosing us! 🙏
+We take care of your clothes
+with love and care ❤️
+
+${companyPhone ? `📞 Contact: ${companyPhone}\n` : ''}
+━━━━━━━━━━━━━━━━━━━━
+_${companyName} - Fresh & Clean!_ ✨`;
 
     const whatsappUrl = `https://wa.me/${order.phone}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, "_blank");
@@ -92,7 +149,10 @@ Thank you for choosing us!
 
   const handleStatusChange = async (docId, newStatus) => {
     try {
-      await updateDoc(doc(db, 'Bookings', docId), { status: newStatus });
+      await updateDoc(doc(db, 'Bookings', docId), { 
+        status: newStatus,
+        lastModified: Timestamp.now()
+      });
       setOrders((prev) =>
         prev.map((order) =>
           order.id === docId ? { ...order, status: newStatus } : order
