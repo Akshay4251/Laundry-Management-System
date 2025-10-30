@@ -43,6 +43,15 @@ const Orders = ({ initialFilter = 'all' }) => {
     cgstPercentage: 9
   });
 
+  // Business settings state
+  const [businessSettings, setBusinessSettings] = useState({
+    businessName: 'Wash & Joy',
+    phoneNumber: '',
+    address: '',
+    gstin: '',
+    logoUrl: ''
+  });
+
   const imageMap = {
     shirt, tshirt, pant, starch, saree: sareeimg, blouse, panjabi: punjabi,
     dhotar, shalu, coat, shervani: sherwani, sweater, onepiece, 
@@ -72,12 +81,22 @@ const Orders = ({ initialFilter = 'all' }) => {
     clothsPerKg: 'Cloths Per Kg'
   };
 
+  // Status emojis for WhatsApp
+  const statusEmojis = {
+    pending: '⏳',
+    'in-progress': '🔄',
+    ready: '✅',
+    completed: '🎉',
+    canceled: '❌'
+  };
+
   useEffect(() => {
     setFilterStatus(initialFilter);
   }, [initialFilter]);
 
   useEffect(() => {
     fetchConfiguration();
+    fetchBusinessSettings();
     
     const unsub = onSnapshot(collection(db, 'Bookings'), (snapshot) => {
       const orderList = snapshot.docs.map((docSnap) => {
@@ -114,6 +133,25 @@ const Orders = ({ initialFilter = 'all' }) => {
 
     return () => unsub();
   }, []);
+
+  const fetchBusinessSettings = async () => {
+    try {
+      // Fetch from the correct path: settings/company
+      const businessDoc = await getDoc(doc(db, "settings", "company"));
+      if (businessDoc.exists()) {
+        const data = businessDoc.data();
+        setBusinessSettings({
+          businessName: data.businessName || 'Wash & Joy',
+          phoneNumber: data.phoneNumber || '',
+          address: data.address || '',
+          gstin: data.gstin || '',
+          logoUrl: data.logoUrl || ''
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching business settings:', error);
+    }
+  };
 
   const fetchConfiguration = async () => {
     try {
@@ -406,37 +444,125 @@ const Orders = ({ initialFilter = 'all' }) => {
     }
   };
 
-  const handleShare = (order) => {
-    if (!order.phone) {
-      alert("Customer phone number not available!");
-      return;
-    }
+  // Enhanced WhatsApp message function
+const handleShare = (order) => {
+  if (!order.phone) {
+    alert("Customer phone number not available!");
+    return;
+  }
 
-    const itemsList = Object.entries(order.items || {})
-      .map(([itemName, details]) => `${details.quantity} ${itemMapping[itemName] || itemName}`)
-      .join(", ");
+  const companyName = businessSettings.businessName || 'Wash & Joy';
+  const serviceName = getServiceName(order.service);
+  
+  const itemsList = Object.entries(order.items || {})
+    .map(([itemName, details]) => 
+      `${details.quantity} x ${itemMapping[itemName] || itemName}\nRs.${(details.quantity * details.price).toFixed(2)}`
+    )
+    .join("\n\n");
 
-    const urgentText = order.urgentDelivery ? "\n*URGENT DELIVERY*" : "";
+  const subtotal = parseFloat(order.totalCost || 0);
+  const sgst = parseFloat(order.sgst || 0);
+  const cgst = parseFloat(order.cgst || 0);
+  const total = parseFloat(order.grandTotal || order.amount || 0);
+  
+  const pickupDate = order.pickupDate ? new Date(order.pickupDate).toLocaleDateString('en-IN', { 
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  }) : 'Not set';
+  
+  const deliveryDate = order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString('en-IN', { 
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  }) : 'Not set';
 
-    const message = `Hello 🙏 ${order.customer}, 
-Your order (${order.id}) for *${order.service}* is currently *${order.status.toUpperCase()}*.${urgentText}
+  let message = '';
+  
+  // Header
+  message += `*${companyName.toUpperCase()}*\n`;
+  message += `${'='.repeat(28)}\n\n`;
+  
+  // Greeting
+  message += `Hello *${order.customer}*!\n\n`;
+  
+  // Urgent badge
+  if (order.urgentDelivery) {
+    message += `*[ URGENT DELIVERY ]*\n\n`;
+  }
+  
+  // Order Info
+  message += `*ORDER UPDATE*\n`;
+  message += `${'-'.repeat(28)}\n`;
+  message += `Order: *#${order.id}*\n`;
+  message += `Service: ${serviceName}\n`;
+  message += `Status: *${order.status.toUpperCase()}*\n`;
+  message += `${'-'.repeat(28)}\n\n`;
+  
+  // Items
+  message += `*YOUR ITEMS*\n`;
+  message += `Total: ${order.totalItems} items\n\n`;
+  message += `${itemsList}\n\n`;
+  message += `${'-'.repeat(28)}\n\n`;
+  
+  // Payment
+  message += `*PAYMENT DETAILS*\n`;
+  message += `${'-'.repeat(28)}\n`;
+  message += `Subtotal: Rs.${subtotal.toFixed(2)}\n`;
+  
+  if (order.gstEnabled && (sgst > 0 || cgst > 0)) {
+    message += `SGST (${order.sgstPercentage}%): Rs.${sgst.toFixed(2)}\n`;
+    message += `CGST (${order.cgstPercentage}%): Rs.${cgst.toFixed(2)}\n`;
+  }
+  
+  message += `${'-'.repeat(28)}\n`;
+  message += `*TOTAL: Rs.${total.toFixed(2)}*\n`;
+  message += `${'-'.repeat(28)}\n\n`;
+  
+  // Schedule
+  message += `*SCHEDULE*\n`;
+  message += `${'-'.repeat(28)}\n`;
+  message += `Pickup: ${pickupDate}\n`;
+  message += `Delivery: ${deliveryDate}\n`;
+  message += `${'-'.repeat(28)}\n`;
+  
+  // Instructions
+  if (order.instructions && order.instructions.trim()) {
+    message += `\n*Note:*\n`;
+    message += `"${order.instructions}"\n\n`;
+  }
+  
+  // Urgent note
+  if (order.urgentDelivery) {
+    message += `\n_Priority processing enabled_\n\n`;
+  }
+  
+  message += `\n${'='.repeat(28)}\n\n`;
+  
+  // Contact
+  message += `*CONTACT US*\n`;
+  if (businessSettings.phoneNumber) {
+    message += `${businessSettings.phoneNumber}\n`;
+  }
+  if (businessSettings.address) {
+    message += `${businessSettings.address}\n`;
+  }
+  if (businessSettings.gstin) {
+    message += `GSTIN: ${businessSettings.gstin}\n`;
+  }
+  
+  message += `\n${'='.repeat(28)}\n\n`;
+  
+  // Closing
+  message += `Thank you for choosing\n`;
+  message += `*${companyName}*\n\n`;
+  message += `_We value your trust!_`;
 
-Items: ${itemsList}
-*Grand Total: ₹${order.amount}*
-
-Pickup Date: ${order.pickupDate}
-Delivery Date: ${order.deliveryDate}
-
-Instructions: ${order.instructions || "No Instructions Given"}
-
-Thank you for choosing us!
-- Wash & Joy
-  `;
-
-    const whatsappUrl = `https://wa.me/${order.phone}?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, "_blank");
-  };
-
+  const whatsappNumber = order.phone.replace(/[^0-9]/g, '');
+  const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
+  
+  window.open(whatsappUrl, "_blank");
+};
   const handleStatusChange = async (docId, newStatus) => {
     try {
       await updateDoc(doc(db, 'Bookings', docId), { 
@@ -751,12 +877,15 @@ Thank you for choosing us!
                           handleShare(order);
                         }}
                         style={{
-                          color: 'green',
+                          color: '#25D366',
                           cursor: 'pointer',
                           border: 'none',
                           background: 'transparent',
                           fontWeight: '600',
-                          fontSize: '0.875rem'
+                          fontSize: '0.875rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.25rem'
                         }}
                       >
                         Share
