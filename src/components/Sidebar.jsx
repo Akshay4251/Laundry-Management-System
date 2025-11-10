@@ -10,7 +10,7 @@ const Sidebar = ({ activeSection, setShowProfile }) => {
     { id: 'dashboard', icon: '📊', label: 'Dashboard', path: '/dashboard' },
     { id: 'booking', icon: '➕', label: 'New Booking', path: '/booking' },
     { id: 'orders', icon: '📦', label: 'Order Tracker', path: '/orders' },
-    { id: 'editorder', icon: '✏️', label: 'Edit Order', path: '/editorder' },
+    // { id: 'editorder', icon: '✏️', label: 'Edit Order', path: '/editorder' },
     { id: 'tags', icon: '🏷️', label: 'Tag Generator', path: '/tags' },
     { id: 'customers', icon: '👥', label: 'Customers', path: '/customers' },
     { id: 'billing', icon: '💰', label: 'Bill Generator', path: '/billing' }
