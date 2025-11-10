@@ -259,11 +259,32 @@ const EditOrder = () => {
     };
   };
 
-  const handleEditClick = (order) => {
-    setSelectedOrder(order);
-    setEditedOrder({ ...order });
-    setShowEditModal(true);
+const handleEditClick = (order) => {
+  setSelectedOrder(order);
+  
+  // Ensure all numeric fields are actual numbers
+  const sanitizedOrder = {
+    ...order,
+    totalItems: Number(order.totalItems) || 0,
+    totalCost: Number(order.totalCost) || 0,
+    sgst: Number(order.sgst) || 0,
+    cgst: Number(order.cgst) || 0,
+    grandTotal: Number(order.grandTotal) || Number(order.totalCost) || 0,
+    sgstPercentage: Number(order.sgstPercentage) || gstConfig.sgstPercentage,
+    cgstPercentage: Number(order.cgstPercentage) || gstConfig.cgstPercentage,
+    // Sanitize items
+    items: Object.entries(order.items || {}).reduce((acc, [key, value]) => {
+      acc[key] = {
+        quantity: Number(value.quantity) || 0,
+        price: Number(value.price) || 0
+      };
+      return acc;
+    }, {})
   };
+  
+  setEditedOrder(sanitizedOrder);
+  setShowEditModal(true);
+};
 
   const handleInputChange = (field, value) => {
     setEditedOrder(prev => ({
